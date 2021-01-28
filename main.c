@@ -1,5 +1,6 @@
 #include <stdlib.h>
 #include <stdio.h>
+#include <math.h>
 #ifdef __APPLE__
 #define GL_SILENCE_DEPRECATION
 #include <OpenGL/gl.h>
@@ -8,15 +9,35 @@
 #endif
 #include <SDL.h>
 
+static float min(float a, float b) {
+    return (a < b) ? a : b;
+}
+
+static float max(float a, float b) {
+    return (a > b) ? a : b;
+}
+
+static void hsl_to_rgb(float h, float s, float l, float *r, float *g,
+                       float *b) {
+    float a = s * min(l, 1.0 - l);
+    float kr = fmod(h * 12, 12);
+    float kg = fmod(8 + h * 12, 12);
+    float kb = fmod(4 + h * 12, 12);
+    *r = l - a * max(-1.0, min(min(kr - 3.0, 9.0 - kr), 1.0));
+    *g = l - a * max(-1.0, min(min(kg - 3.0, 9.0 - kg), 1.0));
+    *b = l - a * max(-1.0, min(min(kb - 3.0, 9.0 - kb), 1.0));
+}
+
 int main(int argc, const char* argv[]) {
     SDL_Init(SDL_INIT_VIDEO);
 
+    const int W = 640;
+    const int H = 480;
+
     SDL_Window* window = SDL_CreateWindow(
-        "Hello",
-        SDL_WINDOWPOS_UNDEFINED,
-        SDL_WINDOWPOS_UNDEFINED,
-        640,
-        480,
+        "Hello World",
+        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
+        W, H,
         SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN
     );
 
@@ -29,16 +50,16 @@ int main(int argc, const char* argv[]) {
 
     int running = 1;
 
-    float r2 = (float)rand() / (float)RAND_MAX;
-    float g2 = (float)rand() / (float)RAND_MAX;
-    float b2 = (float)rand() / (float)RAND_MAX;
+    float h1 = 0.5;
+    float s1 = 0.7;
+    float l1 = 0.6;
 
-    float r1 = 0.4;
-    float g1 = 0.6;
-    float b1 = 0.5;
+    float h2 = 0.95;
+    float s2 = 0.4;
+    float l2 = 0.2;
 
     float t = 0;
-    float dt = 0.01;
+    float dt = 0.002;
 
     while (running) {
         SDL_Event event;
@@ -62,15 +83,17 @@ int main(int argc, const char* argv[]) {
         }
 
         t += dt;
-
         if (t > 1 || t < 0)
             dt = -dt;
 
-        float r = r1 + (r2 - r1) * t;
-        float g = g1 + (g2 - g1) * t;
-        float b = b1 + (b2 - b1) * t;
+        float h = h1 + (h2 - h1) * t;
+        float s = s1 + (s2 - s1) * t;
+        float l = l1 + (l2 - l1) * t;
 
-        glViewport(0, 0, 640, 480);
+        float r, g, b;
+        hsl_to_rgb(h, s, l, &r, &g, &b);
+
+        glViewport(0, 0, W, H);
         glClearColor(r, g, b, 1);
         glClear(GL_COLOR_BUFFER_BIT);
         SDL_GL_SwapWindow(window);
