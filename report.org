@@ -4,6 +4,8 @@
 #+DATE: 27 January 2020
 #+OPTIONS: toc:nil
 
+[[./screenshot.png]]
+
 * What you implemented,
 I implemented around 100 lines of C which creates an OpenGL window using SDL2,
 responds to keypresses, and animates a background color that changes over time.
@@ -15,7 +17,7 @@ N/A
 N/A
 
 * How to use your implementation,
-`make && ./main` after installing necessary dependencies.
+~make && ./main~ after installing necessary dependencies.
 
 * What operating system and compiler you used, and
 I tested using macOS with the system clang.
