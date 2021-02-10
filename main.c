@@ -1,7 +1,7 @@
 #include "SDL_video.h"
-#include <stdlib.h>
-#include <stdio.h>
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 #ifdef __APPLE__
 #define GL_SILENCE_DEPRECATION
 #include <OpenGL/gl.h>
@@ -12,16 +12,12 @@
 
 #include "obj.h"
 
-const int DEBUG   = 1;
+const int DEBUG = 1;
 const int VERBOSE = 1;
 
-static float min(float a, float b) {
-    return (a < b) ? a : b;
-}
+static float min(float a, float b) { return (a < b) ? a : b; }
 
-static float max(float a, float b) {
-    return (a > b) ? a : b;
-}
+static float max(float a, float b) { return (a > b) ? a : b; }
 
 static void hsl_to_rgb(float h, float s, float l, float *r, float *g,
                        float *b) {
@@ -34,20 +30,20 @@ static void hsl_to_rgb(float h, float s, float l, float *r, float *g,
     *b = l - a * max(-1.0, min(min(kb - 3.0, 9.0 - kb), 1.0));
 }
 
-int main(int argc, const char* argv[]) {
+int main(int argc, const char *argv[]) {
     if (argc < 2) {
         fprintf(stderr, "Usage: %s [file.obj]\n", argv[0]);
         return 1;
     }
 
-    const char* obj_filename = argv[1];
-    FILE* obj_file = fopen(obj_filename, "r");
+    const char *obj_filename = argv[1];
+    FILE *obj_file = fopen(obj_filename, "r");
     if (obj_file == NULL) {
         perror("Unable to open obj file");
         return 1;
     }
 
-    struct obj_obj* obj = obj_read(obj_file);
+    struct obj_obj *obj = obj_read(obj_file);
     if (obj == NULL) {
         fclose(obj_file);
         fprintf(stderr, "Failed to parse obj file");
@@ -62,7 +58,8 @@ int main(int argc, const char* argv[]) {
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
-    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,
+                        SDL_GL_CONTEXT_PROFILE_CORE);
 
     if (DEBUG)
         SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
@@ -73,12 +70,9 @@ int main(int argc, const char* argv[]) {
     const int W = 640;
     const int H = 480;
 
-    SDL_Window* window = SDL_CreateWindow(
-        "Hello World",
-        SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        W, H,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN
-    );
+    SDL_Window *window = SDL_CreateWindow(
+        "Hello World", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, W, H,
+        SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
 
     if (window == NULL) {
         fprintf(stderr, "Could not create window: %s\n", SDL_GetError());
@@ -88,7 +82,8 @@ int main(int argc, const char* argv[]) {
     SDL_GLContext context = SDL_GL_CreateContext(window);
 
     if (VERBOSE) {
-        printf("GL_VERSION: %s\nGL_EXTENSIONS: %s\nGL_VENDOR: %s\nGL_RENDERER: %s\n",
+        printf("GL_VERSION: %s\nGL_EXTENSIONS: %s\nGL_VENDOR: %s\nGL_RENDERER: "
+               "%s\n",
                glGetString(GL_VERSION), glGetString(GL_EXTENSIONS),
                glGetString(GL_VENDOR), glGetString(GL_RENDERER));
     }
@@ -110,20 +105,20 @@ int main(int argc, const char* argv[]) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             switch (event.type) {
-                case SDL_KEYDOWN:
-                    switch (event.key.keysym.sym) {
-                        case SDLK_ESCAPE:
-                            running = 0;
-                            break;
-                        default:
-                            break;
-                    }
-                    break;
-                case SDL_QUIT:
+            case SDL_KEYDOWN:
+                switch (event.key.keysym.sym) {
+                case SDLK_ESCAPE:
                     running = 0;
                     break;
                 default:
                     break;
+                }
+                break;
+            case SDL_QUIT:
+                running = 0;
+                break;
+            default:
+                break;
             }
         }
 
