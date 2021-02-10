@@ -2,6 +2,7 @@
 .cache/
 compile_commands.json
 main
+*.o
 *.zip
 *.tex
 *.pdf

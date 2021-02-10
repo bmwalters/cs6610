@@ -10,6 +10,8 @@
 #endif
 #include <SDL.h>
 
+#include "obj.h"
+
 const int DEBUG   = 1;
 const int VERBOSE = 1;
 
@@ -33,6 +35,29 @@ static void hsl_to_rgb(float h, float s, float l, float *r, float *g,
 }
 
 int main(int argc, const char* argv[]) {
+    if (argc < 2) {
+        fprintf(stderr, "Usage: %s [file.obj]\n", argv[0]);
+        return 1;
+    }
+
+    const char* obj_filename = argv[1];
+    FILE* obj_file = fopen(obj_filename, "r");
+    if (obj_file == NULL) {
+        perror("Unable to open obj file");
+        return 1;
+    }
+
+    struct obj_obj* obj = obj_read(obj_file);
+    if (obj == NULL) {
+        fclose(obj_file);
+        fprintf(stderr, "Failed to parse obj file");
+        return 1;
+    }
+    fclose(obj_file);
+
+    if (VERBOSE)
+        printf("Loaded '%s' with %d vertices\n", obj_filename, obj->v->n);
+
     SDL_Init(SDL_INIT_VIDEO);
 
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
@@ -118,6 +143,8 @@ int main(int argc, const char* argv[]) {
         glClear(GL_COLOR_BUFFER_BIT);
         SDL_GL_SwapWindow(window);
     }
+
+    obj_free(obj);
 
     SDL_GL_DeleteContext(context);
     SDL_DestroyWindow(window);
