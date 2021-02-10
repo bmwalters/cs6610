@@ -22,6 +22,8 @@ static float min(float a, float b) { return (a < b) ? a : b; }
 
 static float max(float a, float b) { return (a > b) ? a : b; }
 
+/* column-major order */
+
 static void matmul(float lm[4][4], float rm[4][4], float outm[4][4]) {
     float *l = lm[0];
     float *r = rm[0];
@@ -39,6 +41,43 @@ static void matmul(float lm[4][4], float rm[4][4], float outm[4][4]) {
         for (int j = 0; j < 4; ++j)
             out[j] = a[j] + b[j] + c[j] + d[j];
     }
+}
+
+static void matscale(float out[4][4], float scale) {
+    float m[4][4] = {
+        {scale, 0, 0, 0}, {0, scale, 0, 0}, {0, 0, scale, 0}, {0, 0, 0, 1}};
+    memcpy(out, m, 4 * 4 * sizeof(float));
+}
+
+static void mattranslate(float out[4][4], float tx, float ty, float tz,
+                         float tw) {
+    float m[4][4] = {
+        {1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {tx, ty, tz, tw}};
+    memcpy(out, m, 4 * 4 * sizeof(float));
+}
+
+static void matrotatex(float out[4][4], float theta) {
+    float m[4][4] = {{1, 0, 0, 0},
+                     {0, cos(theta), -sin(theta), 0},
+                     {0, sin(theta), cos(theta), 0},
+                     {0, 0, 0, 1}};
+    memcpy(out, m, 4 * 4 * sizeof(float));
+}
+
+static void matrotatey(float out[4][4], float theta) {
+    float m[4][4] = {{cos(theta), 0, sin(theta), 0},
+                     {0, 1, 0, 0},
+                     {-sin(theta), 0, cos(theta), 0},
+                     {0, 0, 0, 1}};
+    memcpy(out, m, 4 * 4 * sizeof(float));
+}
+
+static void matrotatez(float out[4][4], float theta) {
+    float m[4][4] = {{cos(theta), -sin(theta), 0, 0},
+                     {sin(theta), cos(theta), 0, 0},
+                     {0, 0, 1, 0},
+                     {0, 0, 0, 1}};
+    memcpy(out, m, 4 * 4 * sizeof(float));
 }
 
 static void matprint(float m[4][4]) {
@@ -154,8 +193,9 @@ int main(int argc, const char *argv[]) {
     glUseProgram(program);
 
     float dist = -0.5;
-    float rx = PI / 3;
-    float rz = -PI / 5;
+    float rx = PI / 2;
+    float ry = PI / 3;
+    float rz = PI / 2;
 
     glViewport(0, 0, W, H);
 
@@ -183,27 +223,30 @@ int main(int argc, const char *argv[]) {
 
         dist += 0.01f;
 
-        /* column-major order */
-        float scal[4][4] = {
-            {0.05, 0, 0, 0}, {0, 0.05, 0, 0}, {0, 0, 0.05, 0}, {0, 0, 0, 1}};
-        float trns[4][4] = {
-            {1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, dist}};
-        float rotx[4][4] = {{1, 0, 0, 0},
-                            {0, cos(rx), -sin(rx), 0},
-                            {0, sin(rx), cos(rx), 0},
-                            {0, 0, 0, 1}};
-        float rotz[4][4] = {{cos(rz), -sin(rz), 0, 0},
-                            {sin(rz), cos(rz), 0, 0},
-                            {0, 0, 1, 0},
-                            {0, 0, 0, 1}};
+        float translate[4][4];
+        mattranslate(translate, 0, 0, 0, dist);
+
+        float scale[4][4];
+        matscale(scale, 0.05);
+
+        float rotx[4][4];
+        matrotatex(rotx, rx);
+
+        float roty[4][4];
+        matrotatey(roty, ry);
+
+        float rotz[4][4];
+        matrotatey(rotz, rz);
 
         float m1[4][4];
         float m2[4][4];
+        float m3[4][4];
         float mvp[4][4];
 
-        matmul(rotx, rotz, m1);
-        matmul(m1, scal, m2);
-        matmul(m2, trns, mvp);
+        matmul(translate, scale, m1);
+        matmul(m1, rotz, m2);
+        matmul(m2, roty, m3);
+        matmul(m3, rotx, mvp);
         matprint(mvp);
 
         GLfloat *mvpp = &mvp[0][0];
