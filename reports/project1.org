@@ -4,7 +4,7 @@
 #+DATE: 27 January 2020
 #+OPTIONS: toc:nil
 
-[[./screenshot.png]]
+[[./project1.png]]
 
 * What you implemented,
 I implemented around 100 lines of C which creates an OpenGL window using SDL2,

@@ -1,0 +1,37 @@
+#+TITLE: Project 2 - Transformations
+#+SUBTITLE: CS 6610, Spring 2021, University of Utah
+#+AUTHOR: Bradley Walters, u1174994
+#+DATE: 10 February 2020
+#+OPTIONS: toc:nil
+
+[[./project2_a.png]]
+[[./project2_b.png]]
+[[./project2_c.png]]
+
+* What you implemented,
+I implemented around 300 lines of C to parse vertices from an .obj file,
+pass those vertices to OpenGL using a VBO and VAO, create OpenGL shaders
+to position and color the vertices as points, recompile shaders on keypress,
+and handle mouse controls for adjusting the camera.
+
+* What you could not implement,
+I could not implement centering the object based on its bounding box in time.
+
+* Additional functionalities beyond project requirements,
+N/A
+
+* How to use your implementation,
+~make && ./main [file.obj]~ after installing necessary dependencies.
+
+- Left click and drag to adjust the camera angles.
+- Right click and drag to adjust the camera distance.
+- Press F6 to recompile shaders.
+- Press esc to exit the program.
+
+* What operating system and compiler you used, and
+I tested using Arch Linux with gcc 10.2.0.
+I may have broken macOS support in this version.
+
+* External libraries and additional requirements to compile your project.
+- SDL2
+- GLEW
