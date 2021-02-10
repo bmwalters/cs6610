@@ -5,4 +5,4 @@ ifeq "$(shell uname)" "Darwin"
 endif
 
 main: main.c
-	cc main.c -o main `sdl2-config --cflags --libs` $(FLAGS_GL)
+	cc main.c -o main -lm $(FLAGS_GL) `sdl2-config --cflags` `sdl2-config --libs`
