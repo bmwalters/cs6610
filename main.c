@@ -4,9 +4,9 @@
 #include <stdlib.h>
 #ifdef __APPLE__
 #define GL_SILENCE_DEPRECATION
-#include <OpenGL/gl.h>
+#include <OpenGL/glew.h>
 #else
-#include <GL/gl.h>
+#include <GL/glew.h>
 #endif
 #include <SDL.h>
 
@@ -45,7 +45,6 @@ int main(int argc, const char *argv[]) {
 
     struct obj_obj *obj = obj_read(obj_file);
     if (obj == NULL) {
-        fclose(obj_file);
         fprintf(stderr, "Failed to parse obj file");
         return 1;
     }
@@ -87,6 +86,15 @@ int main(int argc, const char *argv[]) {
                glGetString(GL_VERSION), glGetString(GL_EXTENSIONS),
                glGetString(GL_VENDOR), glGetString(GL_RENDERER));
     }
+
+    GLenum glewErr;
+    if ((glewErr = glewInit()) != GLEW_OK) {
+        fprintf(stderr, "glewInit failed: %s\n", glewGetErrorString(glewErr));
+        return 1;
+    }
+
+    if (VERBOSE)
+        printf("GLEW_VERSION: %s\n", glewGetString(GLEW_VERSION));
 
     int running = 1;
 
