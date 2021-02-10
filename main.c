@@ -16,9 +16,37 @@
 const int DEBUG = 1;
 const int VERBOSE = 1;
 
+const float PI = 3.1415926535;
+
 static float min(float a, float b) { return (a < b) ? a : b; }
 
 static float max(float a, float b) { return (a > b) ? a : b; }
+
+static void matmul(float lm[4][4], float rm[4][4], float outm[4][4]) {
+    float *l = lm[0];
+    float *r = rm[0];
+    float *out = outm[0];
+    for (int i = 0; i < 16; i += 4, out += 4) {
+        float a[4], b[4], c[4], d[4];
+        for (int j = 0; j < 4; ++j)
+            a[j] = l[j] * r[i];
+        for (int j = 0; j < 4; ++j)
+            b[j] = l[4 + j] * r[i + 1];
+        for (int j = 0; j < 4; ++j)
+            c[j] = l[8 + j] * r[i + 2];
+        for (int j = 0; j < 4; ++j)
+            d[j] = l[12 + j] * r[i + 3];
+        for (int j = 0; j < 4; ++j)
+            out[j] = a[j] + b[j] + c[j] + d[j];
+    }
+}
+
+static void matprint(float m[4][4]) {
+    printf("%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n", m[0][0],
+           m[1][0], m[2][0], m[3][0], m[0][1], m[1][1], m[2][1], m[3][1],
+           m[0][2], m[1][2], m[2][2], m[3][2], m[0][3], m[1][3], m[2][3],
+           m[3][3]);
+}
 
 static bool compile_shader(GLenum type, const char *const filename,
                            GLuint *out);
@@ -125,6 +153,10 @@ int main(int argc, const char *argv[]) {
 
     glUseProgram(program);
 
+    float dist = -0.5;
+    float rx = PI / 3;
+    float rz = -PI / 5;
+
     glViewport(0, 0, W, H);
 
     int running = 1;
@@ -148,6 +180,35 @@ int main(int argc, const char *argv[]) {
                 break;
             }
         }
+
+        dist += 0.01f;
+
+        /* column-major order */
+        float scal[4][4] = {
+            {0.05, 0, 0, 0}, {0, 0.05, 0, 0}, {0, 0, 0.05, 0}, {0, 0, 0, 1}};
+        float trns[4][4] = {
+            {1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {0, 0, 0, dist}};
+        float rotx[4][4] = {{1, 0, 0, 0},
+                            {0, cos(rx), -sin(rx), 0},
+                            {0, sin(rx), cos(rx), 0},
+                            {0, 0, 0, 1}};
+        float rotz[4][4] = {{cos(rz), -sin(rz), 0, 0},
+                            {sin(rz), cos(rz), 0, 0},
+                            {0, 0, 1, 0},
+                            {0, 0, 0, 1}};
+
+        float m1[4][4];
+        float m2[4][4];
+        float mvp[4][4];
+
+        matmul(rotx, rotz, m1);
+        matmul(m1, scal, m2);
+        matmul(m2, trns, mvp);
+        matprint(mvp);
+
+        GLfloat *mvpp = &mvp[0][0];
+        glUniformMatrix4fv(glGetUniformLocation(program, "mvp"), 1, GL_FALSE,
+                           mvpp);
 
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
