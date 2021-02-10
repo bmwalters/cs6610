@@ -1,5 +1,6 @@
 #include "SDL_video.h"
 #include <math.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #ifdef __APPLE__
@@ -19,16 +20,8 @@ static float min(float a, float b) { return (a < b) ? a : b; }
 
 static float max(float a, float b) { return (a > b) ? a : b; }
 
-static void hsl_to_rgb(float h, float s, float l, float *r, float *g,
-                       float *b) {
-    float a = s * min(l, 1.0 - l);
-    float kr = fmod(h * 12, 12);
-    float kg = fmod(8 + h * 12, 12);
-    float kb = fmod(4 + h * 12, 12);
-    *r = l - a * max(-1.0, min(min(kr - 3.0, 9.0 - kr), 1.0));
-    *g = l - a * max(-1.0, min(min(kg - 3.0, 9.0 - kg), 1.0));
-    *b = l - a * max(-1.0, min(min(kb - 3.0, 9.0 - kb), 1.0));
-}
+static bool compile_shader(GLenum type, const char *const filename,
+                           GLuint *out);
 
 int main(int argc, const char *argv[]) {
     if (argc < 2) {
@@ -96,19 +89,45 @@ int main(int argc, const char *argv[]) {
     if (VERBOSE)
         printf("GLEW_VERSION: %s\n", glewGetString(GLEW_VERSION));
 
+    GLuint program = glCreateProgram();
+
+    GLuint vs;
+    compile_shader(GL_VERTEX_SHADER, "shader.vert", &vs);
+    glAttachShader(program, vs);
+
+    GLuint fs;
+    compile_shader(GL_FRAGMENT_SHADER, "shader.frag", &fs);
+    glAttachShader(program, fs);
+
+    glLinkProgram(program);
+
+    GLint program_linked;
+    glGetProgramiv(program, GL_LINK_STATUS, &program_linked);
+    if (program_linked != GL_TRUE) {
+        GLchar message[1024];
+        glGetProgramInfoLog(program, 1024, NULL, message);
+        fprintf(stderr, "Failed to link shader program: %s\n", message);
+    }
+
+    GLuint vao;
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
+
+    GLuint vbo;
+    glGenBuffers(1, &vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBufferData(GL_ARRAY_BUFFER, obj->v->n * sizeof(struct obj_vertex),
+                 obj->v->v, GL_STATIC_DRAW);
+
+    GLuint pos = glGetAttribLocation(program, "pos");
+    glEnableVertexAttribArray(pos);
+    glVertexAttribPointer(pos, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+    glUseProgram(program);
+
+    glViewport(0, 0, W, H);
+
     int running = 1;
-
-    float h1 = 0.5;
-    float s1 = 0.7;
-    float l1 = 0.6;
-
-    float h2 = 0.95;
-    float s2 = 0.4;
-    float l2 = 0.2;
-
-    float t = 0;
-    float dt = 0.002;
-
     while (running) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
@@ -130,20 +149,11 @@ int main(int argc, const char *argv[]) {
             }
         }
 
-        t += dt;
-        if (t > 1 || t < 0)
-            dt = -dt;
+        glClearColor(0, 0, 0, 1);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        float h = h1 + (h2 - h1) * t;
-        float s = s1 + (s2 - s1) * t;
-        float l = l1 + (l2 - l1) * t;
+        glDrawArrays(GL_POINTS, 0, obj->v->n);
 
-        float r, g, b;
-        hsl_to_rgb(h, s, l, &r, &g, &b);
-
-        glViewport(0, 0, W, H);
-        glClearColor(r, g, b, 1);
-        glClear(GL_COLOR_BUFFER_BIT);
         SDL_GL_SwapWindow(window);
     }
 
@@ -153,4 +163,42 @@ int main(int argc, const char *argv[]) {
     SDL_DestroyWindow(window);
     SDL_Quit();
     return 0;
+}
+
+static bool compile_shader(GLenum type, const char *const filename,
+                           GLuint *out) {
+    char shader_source[2048];
+    FILE *shader_file = fopen(filename, "r");
+    if (shader_file == NULL) {
+        fprintf(stderr, "Failed to open %s\n", filename);
+        return false;
+    }
+    GLint shader_len = fread(shader_source, 1, 2048, shader_file);
+    if (ferror(shader_file)) {
+        fclose(shader_file);
+        fprintf(stderr, "Failed to read %s\n", filename);
+        return false;
+    }
+    if (!feof(shader_file)) {
+        fclose(shader_file);
+        fprintf(stderr, "%s source file too large\n", filename);
+        return false;
+    }
+    fclose(shader_file);
+
+    GLuint shader = glCreateShader(type);
+    const GLchar *shader_source_ptr = shader_source;
+    glShaderSource(shader, 1, &shader_source_ptr, &shader_len);
+    glCompileShader(shader);
+
+    GLint compiled;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled);
+    if (compiled != GL_TRUE) {
+        GLchar message[1024];
+        glGetShaderInfoLog(shader, 1024, NULL, message);
+        fprintf(stderr, "Failed to link shader program: %s\n", message);
+    }
+
+    *out = shader;
+    return true;
 }
