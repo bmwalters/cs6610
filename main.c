@@ -1,3 +1,4 @@
+#include "SDL_video.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
@@ -8,6 +9,9 @@
 #include <GL/gl.h>
 #endif
 #include <SDL.h>
+
+const int DEBUG   = 1;
+const int VERBOSE = 1;
 
 static float min(float a, float b) {
     return (a < b) ? a : b;
@@ -31,6 +35,16 @@ static void hsl_to_rgb(float h, float s, float l, float *r, float *g,
 int main(int argc, const char* argv[]) {
     SDL_Init(SDL_INIT_VIDEO);
 
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+
+    if (DEBUG)
+        SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_DEBUG_FLAG);
+
+    if (SDL_GL_SetSwapInterval(-1) < 0)
+        SDL_GL_SetSwapInterval(1);
+
     const int W = 640;
     const int H = 480;
 
@@ -42,11 +56,17 @@ int main(int argc, const char* argv[]) {
     );
 
     if (window == NULL) {
-        printf("Could not create window: %s\n", SDL_GetError());
+        fprintf(stderr, "Could not create window: %s\n", SDL_GetError());
         return 1;
     }
 
     SDL_GLContext context = SDL_GL_CreateContext(window);
+
+    if (VERBOSE) {
+        printf("GL_VERSION: %s\nGL_EXTENSIONS: %s\nGL_VENDOR: %s\nGL_RENDERER: %s\n",
+               glGetString(GL_VERSION), glGetString(GL_EXTENSIONS),
+               glGetString(GL_VENDOR), glGetString(GL_RENDERER));
+    }
 
     int running = 1;
 
