@@ -192,7 +192,7 @@ int main(int argc, const char *argv[]) {
 
     glUseProgram(program);
 
-    float dist = -0.5;
+    float dist = 1.0;
     float rx = PI / 2;
     float ry = PI / 3;
     float rz = PI / 2;
@@ -213,6 +213,15 @@ int main(int argc, const char *argv[]) {
                     break;
                 }
                 break;
+            case SDL_MOUSEMOTION: {
+                if (event.motion.state & SDL_BUTTON_LMASK) {
+                    ry += event.motion.xrel * 0.005;
+                    rx += event.motion.yrel * 0.005;
+                } else if (event.motion.state & SDL_BUTTON_RMASK) {
+                    dist += event.motion.yrel * 0.005;
+                }
+                break;
+            }
             case SDL_QUIT:
                 running = 0;
                 break;
@@ -220,8 +229,6 @@ int main(int argc, const char *argv[]) {
                 break;
             }
         }
-
-        dist += 0.01f;
 
         float translate[4][4];
         mattranslate(translate, 0, 0, 0, dist);
@@ -247,7 +254,6 @@ int main(int argc, const char *argv[]) {
         matmul(m1, rotz, m2);
         matmul(m2, roty, m3);
         matmul(m3, rotx, mvp);
-        matprint(mvp);
 
         GLfloat *mvpp = &mvp[0][0];
         glUniformMatrix4fv(glGetUniformLocation(program, "mvp"), 1, GL_FALSE,
