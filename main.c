@@ -87,8 +87,8 @@ static void matprint(float m[4][4]) {
            m[3][3]);
 }
 
-static bool compile_shader(GLenum type, const char *const filename,
-                           GLuint *out);
+static bool compile_shader_file(const char *const filename, GLuint shader);
+static bool compile_shader_program(GLuint program);
 
 int main(int argc, const char *argv[]) {
     if (argc < 2) {
@@ -158,23 +158,7 @@ int main(int argc, const char *argv[]) {
 
     GLuint program = glCreateProgram();
 
-    GLuint vs;
-    compile_shader(GL_VERTEX_SHADER, "shader.vert", &vs);
-    glAttachShader(program, vs);
-
-    GLuint fs;
-    compile_shader(GL_FRAGMENT_SHADER, "shader.frag", &fs);
-    glAttachShader(program, fs);
-
-    glLinkProgram(program);
-
-    GLint program_linked;
-    glGetProgramiv(program, GL_LINK_STATUS, &program_linked);
-    if (program_linked != GL_TRUE) {
-        GLchar message[1024];
-        glGetProgramInfoLog(program, 1024, NULL, message);
-        fprintf(stderr, "Failed to link shader program: %s\n", message);
-    }
+    compile_shader_program(program);
 
     GLuint vao;
     glGenVertexArrays(1, &vao);
@@ -208,6 +192,9 @@ int main(int argc, const char *argv[]) {
                 switch (event.key.keysym.sym) {
                 case SDLK_ESCAPE:
                     running = 0;
+                    break;
+                case SDLK_F6:
+                    compile_shader_program(program);
                     break;
                 default:
                     break;
@@ -275,8 +262,7 @@ int main(int argc, const char *argv[]) {
     return 0;
 }
 
-static bool compile_shader(GLenum type, const char *const filename,
-                           GLuint *out) {
+static bool compile_shader_file(const char *const filename, GLuint shader) {
     char shader_source[2048];
     FILE *shader_file = fopen(filename, "r");
     if (shader_file == NULL) {
@@ -296,7 +282,6 @@ static bool compile_shader(GLenum type, const char *const filename,
     }
     fclose(shader_file);
 
-    GLuint shader = glCreateShader(type);
     const GLchar *shader_source_ptr = shader_source;
     glShaderSource(shader, 1, &shader_source_ptr, &shader_len);
     glCompileShader(shader);
@@ -309,6 +294,33 @@ static bool compile_shader(GLenum type, const char *const filename,
         fprintf(stderr, "Failed to link shader program: %s\n", message);
     }
 
-    *out = shader;
     return true;
+}
+
+static bool compile_shader_program(GLuint program) {
+    GLuint vs = glCreateShader(GL_VERTEX_SHADER);
+    compile_shader_file("shader.vert", vs);
+    glAttachShader(program, vs);
+
+    GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
+    compile_shader_file("shader.frag", fs);
+    glAttachShader(program, fs);
+
+    glLinkProgram(program);
+
+    GLint program_linked;
+    glGetProgramiv(program, GL_LINK_STATUS, &program_linked);
+    if (program_linked != GL_TRUE) {
+        GLchar message[1024];
+        glGetProgramInfoLog(program, 1024, NULL, message);
+        fprintf(stderr, "Failed to link shader program: %s\n", message);
+    }
+
+    glDetachShader(program, vs);
+    glDetachShader(program, fs);
+
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+
+    return program_linked == GL_TRUE;
 }
