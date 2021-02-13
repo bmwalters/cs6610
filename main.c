@@ -103,15 +103,16 @@ int main(int argc, const char *argv[]) {
         return 1;
     }
 
-    struct obj_obj *obj = obj_read(obj_file);
-    if (obj == NULL) {
+    struct obj_obj obj;
+    obj_init(&obj);
+    if (!obj_read(&obj, obj_file)) {
         fprintf(stderr, "Failed to parse obj file");
         return 1;
     }
     fclose(obj_file);
 
     if (VERBOSE)
-        printf("Loaded '%s' with %d vertices\n", obj_filename, obj->v->n);
+        printf("Loaded '%s' with %d vertices\n", obj_filename, obj.v.n);
 
     SDL_Init(SDL_INIT_VIDEO);
 
@@ -167,8 +168,8 @@ int main(int argc, const char *argv[]) {
     GLuint vbo;
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, obj->v->n * sizeof(struct obj_vertex),
-                 obj->v->v, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, obj.v.n * sizeof(struct obj_vertex), obj.v.v,
+                 GL_STATIC_DRAW);
 
     GLuint pos = glGetAttribLocation(program, "pos");
     glEnableVertexAttribArray(pos);
@@ -249,12 +250,12 @@ int main(int argc, const char *argv[]) {
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glDrawArrays(GL_POINTS, 0, obj->v->n);
+        glDrawArrays(GL_POINTS, 0, obj.v.n);
 
         SDL_GL_SwapWindow(window);
     }
 
-    obj_free(obj);
+    obj_release(&obj);
 
     SDL_GL_DeleteContext(context);
     SDL_DestroyWindow(window);

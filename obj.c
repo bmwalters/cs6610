@@ -3,16 +3,17 @@
 #include <stdlib.h>
 #include <string.h>
 
-static struct obj_vertex_vector *vertex_vector_new() {
-    struct obj_vertex_vector *vec = malloc(sizeof(struct obj_vertex_vector));
-    if (vec == NULL)
-        return NULL;
-
+static void vertex_vector_init(struct obj_vertex_vector *vec) {
     vec->n = 0;
     vec->c = 0;
     vec->v = NULL;
+}
 
-    return vec;
+static void vertex_vector_release(struct obj_vertex_vector *vec) {
+    vec->n = 0;
+    vec->c = 0;
+    free(vec->v);
+    vec->v = NULL;
 }
 
 static bool vertex_vector_add(struct obj_vertex_vector *vec,
@@ -35,22 +36,11 @@ static bool vertex_vector_add(struct obj_vertex_vector *vec,
     return true;
 }
 
-static void vertex_vector_free(struct obj_vertex_vector *vec) {
-    vec->n = 0;
-    vec->c = 0;
-    free(vec->v);
-    vec->v = NULL;
-}
+void obj_init(struct obj_obj *obj) { vertex_vector_init(&obj->v); }
 
-struct obj_obj *obj_read(FILE *file) {
-    struct obj_obj *obj = malloc(sizeof(struct obj_obj));
-    if (obj == NULL)
-        return NULL;
+void obj_release(struct obj_obj *obj) { vertex_vector_release(&obj->v); }
 
-    struct obj_vertex_vector *vertices = vertex_vector_new();
-    if (vertices == NULL)
-        return NULL;
-
+bool obj_read(struct obj_obj *obj, FILE *file) {
     const int nline = 1024;
     char line[nline];
 
@@ -58,24 +48,13 @@ struct obj_obj *obj_read(FILE *file) {
         if (line[0] == 'v' && line[1] == ' ') {
             struct obj_vertex vertex;
             if (sscanf(line, "v %f %f %f", &vertex.x, &vertex.y, &vertex.z) ==
-                EOF) {
-                vertex_vector_free(vertices);
-                return NULL;
-            }
+                EOF)
+                return false;
 
-            if (!vertex_vector_add(vertices, &vertex)) {
-                vertex_vector_free(vertices);
-                return NULL;
-            }
+            if (!vertex_vector_add(&obj->v, &vertex))
+                return false;
         }
     }
 
-    obj->v = vertices;
-
-    return obj;
-}
-
-void obj_free(struct obj_obj *obj) {
-    vertex_vector_free(obj->v);
-    obj->v = NULL;
+    return true;
 }
