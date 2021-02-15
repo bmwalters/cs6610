@@ -14,6 +14,7 @@
 #include "obj.h"
 
 const int DEBUG = 1;
+const int DEBUG_AXES = 0;
 const int VERBOSE = 1;
 
 const float PI = 3.1415926535;
@@ -76,6 +77,52 @@ static void matrotatez(float out[4][4], float theta) {
                      {0, 0, 1, 0},
                      {0, 0, 0, 1}};
     memcpy(out, m, sizeof(float[4][4]));
+}
+
+static float vecmag(float v[3]) {
+    return sqrtf(powf(v[0], 2) + powf(v[1], 2) + powf(v[2], 2));
+}
+
+static void vecnormalize(float v[3]) {
+    float mag = vecmag(v);
+    v[0] /= mag;
+    v[1] /= mag;
+    v[2] /= mag;
+}
+
+static float vecdot(float u[3], float v[3]) {
+    return u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
+}
+
+static void veccross(float out[3], float u[3], float v[3]) {
+    out[0] = u[1] * v[2] - u[2] * v[1];
+    out[1] = u[2] * v[0] - u[0] * v[2];
+    out[2] = u[0] * v[1] - u[1] * v[0];
+}
+
+static void matview(float out[4][4], float eye[3], float target[3],
+                    float up[3]) {
+    float f[3] = {target[0] - eye[0], target[1] - eye[1], target[2] - eye[2]};
+    vecnormalize(f);
+
+    float s[3];
+    veccross(s, f, up);
+    vecnormalize(s);
+
+    float u[3];
+    veccross(u, s, f);
+
+    float m[4][4] = {{s[0], u[0], -f[0], 0},
+                     {s[1], u[1], -f[1], 0},
+                     {s[2], u[2], -f[2], 0},
+                     {-vecdot(s, eye), -vecdot(u, eye), vecdot(f, eye), 1}};
+    memcpy(out, m, sizeof(float[4][4]));
+}
+
+static void veceulerangles(float out[3], float yaw, float pitch) {
+    out[0] = cosf(yaw) * cosf(pitch);
+    out[1] = sinf(pitch);
+    out[2] = sinf(yaw) * cosf(pitch);
 }
 
 static void matperspective(float out[4][4], float f, float n) {
@@ -208,14 +255,17 @@ int main(int argc, const char *argv[]) {
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
-    // glBufferData(GL_ARRAY_BUFFER, obj.v.n * sizeof(struct obj_vertex),
-    // obj.v.v, GL_STATIC_DRAW);
-
 #define nlines 3
-    float lines[nlines][3][3] = {
-        {{0, 0, 0}, {1, 0, 0}}, {{0, 0, 0}, {0, 1, 0}}, {{0, 0, 0}, {0, 0, 1}}};
-    glBufferData(GL_ARRAY_BUFFER, nlines * 6 * sizeof(float), lines,
-                 GL_STATIC_DRAW);
+    if (DEBUG_AXES) {
+        float lines[nlines][3][3] = {{{0, 0, 0}, {1, 0, 0}},
+                                     {{0, 0, 0}, {0, 1, 0}},
+                                     {{0, 0, 0}, {0, 0, 1}}};
+        glBufferData(GL_ARRAY_BUFFER, nlines * 6 * sizeof(float), lines,
+                     GL_STATIC_DRAW);
+    } else {
+        glBufferData(GL_ARRAY_BUFFER, obj.v.n * sizeof(struct obj_vertex),
+                     obj.v.v, GL_STATIC_DRAW);
+    }
 
     GLuint pos = glGetAttribLocation(program, "pos");
     glEnableVertexAttribArray(pos);
@@ -226,16 +276,32 @@ int main(int argc, const char *argv[]) {
     struct obj_vertex obj_min, obj_max;
     bounding_box(&obj, &obj_min, &obj_max);
 
+    if (VERBOSE)
+        printf("obj bounding box: min=(%f, %f, %f); max=(%f, %f, %f)\n",
+               obj_min.x, obj_min.y, obj_min.z, obj_max.x, obj_max.y,
+               obj_max.z);
+
+    float obj_fill_scale =
+        1 / min(min(obj_max.x - obj_min.x, obj_max.y - obj_min.y),
+                obj_max.z - obj_min.z);
+
+    if (VERBOSE)
+        printf("obj_fill_scale = %f\n", obj_fill_scale);
+
+    float obj_center_xoff = -(fabs(obj_max.x) - fabs(obj_min.x)) / 2;
+    float obj_center_yoff = -(fabs(obj_max.y) - fabs(obj_min.y)) / 2;
+    float obj_center_zoff = -(fabs(obj_max.z) - fabs(obj_min.z)) / 2;
+
+    // TODO
     float pl = -500;
     float pr = 500;
     float pb = -500;
     float pt = 500;
-    float pf = 500; // TODO: Values for these
+    float pf = 500;
     float pn = 0.1;
 
-    float rx = 0;
-    float ry = 0;
-    float rz = 0;
+    float yaw = PI / 2;
+    float pitch = 0;
 
     glViewport(0, 0, W, H);
 
@@ -258,10 +324,10 @@ int main(int argc, const char *argv[]) {
                 break;
             case SDL_MOUSEMOTION: {
                 if (event.motion.state & SDL_BUTTON_LMASK) {
-                    ry += event.motion.xrel * 0.005;
-                    rx += event.motion.yrel * 0.005;
+                    yaw += event.motion.xrel * 0.005;
+                    pitch += event.motion.yrel * 0.005;
                 } else if (event.motion.state & SDL_BUTTON_RMASK) {
-                    pn += event.motion.yrel * 0.005;
+                    // TODO
                 }
                 break;
             }
@@ -275,6 +341,7 @@ int main(int argc, const char *argv[]) {
 
         // view -> canonical view volume projection
         // "projection matrix"
+        // TODO
         float ortho[4][4];
         //        matortho(ortho, pl, pr, pb, pt, pf, pn);
         matscale(ortho, 1);
@@ -287,46 +354,30 @@ int main(int argc, const char *argv[]) {
         // world -> view transformation
         // "view matrix"
         float view[4][4];
-        mattranslate(view, 0, 0, 0); // TODO (glm::lookAt)
+        float zero[3] = {0, 0, 0};
+        float up[3] = {0, 1, 0};
+        float eye[3];
+        veceulerangles(eye, yaw, pitch);
+        matview(view, eye, zero, up);
 
         // model -> world transformation
         // "model matrix"
-        float model_to_world_center[4][4];
-        mattranslate(model_to_world_center, 0, 0, 0);
-        float model[4][4];
-        float scale[4][4];
-        matscale(scale, 1);
-        matmul(scale, model_to_world_center, model);
+        float obj_rot[4][4];
+        matrotatex(obj_rot, PI / 2);
+        float obj_scale[4][4];
+        matscale(obj_scale, obj_fill_scale);
+        float obj_center[4][4];
+        mattranslate(obj_center, obj_center_xoff, obj_center_yoff,
+                     obj_center_zoff);
 
-        // transformations in model space
-        float rotz[4][4], roty[4][4], rotx[4][4];
-        matrotatez(rotz, rz);
-        matrotatey(roty, ry);
-        matrotatex(rotx, rx);
-        float temp1[4][4], mtrans[4][4];
-        matmul(rotz, roty, temp1);
-        matmul(temp1, rotx, mtrans);
+        float temp1[4][4], model[4][4];
+        matmul(obj_rot, obj_scale, temp1);
+        matmul(temp1, obj_center, model);
 
-        // v' = P V M Mt v
-        printf("mtrans\n");
-        matprint(mtrans);
-
-        printf("model\n");
-        matprint(model);
-
-        printf("view\n");
-        matprint(view);
-
-        printf("projection\n");
-        matprint(projection);
-
-        float temp2[4][4], mvp[4][4];
+        // mvp. v' = P V M v
+        float mvp[4][4];
         matmul(projection, view, temp1);
-        matmul(temp1, model, temp2);
-        matmul(temp2, mtrans, mvp);
-
-        printf("mvp\n");
-        matprint(mvp);
+        matmul(temp1, model, mvp);
 
         GLfloat *mvpp = &mvp[0][0];
         glUniformMatrix4fv(glGetUniformLocation(program, "mvp"), 1, GL_FALSE,
@@ -335,8 +386,10 @@ int main(int argc, const char *argv[]) {
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        //        glDrawArrays(GL_POINTS, 0, obj.v.n);
-        glDrawArrays(GL_LINES, 0, 2 * nlines);
+        if (DEBUG_AXES)
+            glDrawArrays(GL_LINES, 0, 2 * nlines);
+        else
+            glDrawArrays(GL_POINTS, 0, obj.v.n);
 
         SDL_GL_SwapWindow(window);
     }
