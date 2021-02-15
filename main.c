@@ -46,14 +46,12 @@ static void matmul(float lm[4][4], float rm[4][4], float outm[4][4]) {
 static void matscale(float out[4][4], float scale) {
     float m[4][4] = {
         {scale, 0, 0, 0}, {0, scale, 0, 0}, {0, 0, scale, 0}, {0, 0, 0, 1}};
-    memcpy(out, m, 4 * 4 * sizeof(float));
+    memcpy(out, m, sizeof(float[4][4]));
 }
 
-static void mattranslate(float out[4][4], float tx, float ty, float tz,
-                         float tw) {
-    float m[4][4] = {
-        {1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {tx, ty, tz, tw}};
-    memcpy(out, m, 4 * 4 * sizeof(float));
+static void mattranslate(float out[4][4], float tx, float ty, float tz) {
+    float m[4][4] = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {tx, ty, tz, 1}};
+    memcpy(out, m, sizeof(float[4][4]));
 }
 
 static void matrotatex(float out[4][4], float theta) {
@@ -61,7 +59,7 @@ static void matrotatex(float out[4][4], float theta) {
                      {0, cos(theta), -sin(theta), 0},
                      {0, sin(theta), cos(theta), 0},
                      {0, 0, 0, 1}};
-    memcpy(out, m, 4 * 4 * sizeof(float));
+    memcpy(out, m, sizeof(float[4][4]));
 }
 
 static void matrotatey(float out[4][4], float theta) {
@@ -69,7 +67,7 @@ static void matrotatey(float out[4][4], float theta) {
                      {0, 1, 0, 0},
                      {-sin(theta), 0, cos(theta), 0},
                      {0, 0, 0, 1}};
-    memcpy(out, m, 4 * 4 * sizeof(float));
+    memcpy(out, m, sizeof(float[4][4]));
 }
 
 static void matrotatez(float out[4][4], float theta) {
@@ -77,7 +75,23 @@ static void matrotatez(float out[4][4], float theta) {
                      {sin(theta), cos(theta), 0, 0},
                      {0, 0, 1, 0},
                      {0, 0, 0, 1}};
-    memcpy(out, m, 4 * 4 * sizeof(float));
+    memcpy(out, m, sizeof(float[4][4]));
+}
+
+static void matperspective(float out[4][4], float f, float n) {
+    float m[4][4] = {
+        {n, 0, 0, 0}, {0, n, 0, 0}, {0, 0, n + f, 1}, {0, 0, -f * n, 0}};
+    memcpy(out, m, sizeof(float[4][4]));
+}
+
+static void matortho(float out[4][4], float l, float r, float b, float t,
+                     float f, float n) {
+    float m[4][4] = {
+        {2 / (r - l), 0, 0, 0},
+        {0, 2 / (t - b), 0, 0},
+        {0, 0, 2 / (f - n), 0},
+        {-(r + l) / (r - l), -(t + b) / (t - b), -(f + n) / (f - n), 1}};
+    memcpy(out, m, sizeof(float[4][4]));
 }
 
 static void matprint(float m[4][4]) {
@@ -85,6 +99,31 @@ static void matprint(float m[4][4]) {
            m[1][0], m[2][0], m[3][0], m[0][1], m[1][1], m[2][1], m[3][1],
            m[0][2], m[1][2], m[2][2], m[3][2], m[0][3], m[1][3], m[2][3],
            m[3][3]);
+}
+
+static void bounding_box(const struct obj_obj *obj, struct obj_vertex *outmin,
+                         struct obj_vertex *outmax) {
+    if (obj->v.n < 1)
+        return;
+    struct obj_vertex min = obj->v.v[0];
+    struct obj_vertex max = obj->v.v[0];
+    for (int i = 1; i < obj->v.n; i++) {
+        struct obj_vertex vertex = obj->v.v[i];
+        if (vertex.x < min.x)
+            min.x = vertex.x;
+        if (vertex.y < min.y)
+            min.y = vertex.y;
+        if (vertex.z < min.z)
+            min.z = vertex.z;
+        if (vertex.x > max.x)
+            max.x = vertex.x;
+        if (vertex.y > max.y)
+            max.y = vertex.y;
+        if (vertex.z > max.z)
+            max.z = vertex.z;
+    }
+    *outmin = min;
+    *outmax = max;
 }
 
 static bool compile_shader_file(const char *const filename, GLuint shader);
@@ -168,7 +207,14 @@ int main(int argc, const char *argv[]) {
     GLuint vbo;
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, obj.v.n * sizeof(struct obj_vertex), obj.v.v,
+
+    // glBufferData(GL_ARRAY_BUFFER, obj.v.n * sizeof(struct obj_vertex),
+    // obj.v.v, GL_STATIC_DRAW);
+
+#define nlines 3
+    float lines[nlines][3][3] = {
+        {{0, 0, 0}, {1, 0, 0}}, {{0, 0, 0}, {0, 1, 0}}, {{0, 0, 0}, {0, 0, 1}}};
+    glBufferData(GL_ARRAY_BUFFER, nlines * 6 * sizeof(float), lines,
                  GL_STATIC_DRAW);
 
     GLuint pos = glGetAttribLocation(program, "pos");
@@ -177,10 +223,19 @@ int main(int argc, const char *argv[]) {
 
     glUseProgram(program);
 
-    float dist = 1.0;
-    float rx = PI / 2;
-    float ry = PI / 3;
-    float rz = PI / 2;
+    struct obj_vertex obj_min, obj_max;
+    bounding_box(&obj, &obj_min, &obj_max);
+
+    float pl = -500;
+    float pr = 500;
+    float pb = -500;
+    float pt = 500;
+    float pf = 500; // TODO: Values for these
+    float pn = 0.1;
+
+    float rx = 0;
+    float ry = 0;
+    float rz = 0;
 
     glViewport(0, 0, W, H);
 
@@ -206,7 +261,7 @@ int main(int argc, const char *argv[]) {
                     ry += event.motion.xrel * 0.005;
                     rx += event.motion.yrel * 0.005;
                 } else if (event.motion.state & SDL_BUTTON_RMASK) {
-                    dist += event.motion.yrel * 0.005;
+                    pn += event.motion.yrel * 0.005;
                 }
                 break;
             }
@@ -218,30 +273,60 @@ int main(int argc, const char *argv[]) {
             }
         }
 
-        float translate[4][4];
-        mattranslate(translate, 0, 0, 0, dist);
+        // view -> canonical view volume projection
+        // "projection matrix"
+        float ortho[4][4];
+        //        matortho(ortho, pl, pr, pb, pt, pf, pn);
+        matscale(ortho, 1);
+        float perspective[4][4];
+        matscale(perspective, 1);
+        /* matperspective(perspective, pf, pn); */
+        float projection[4][4];
+        matmul(ortho, perspective, projection);
 
+        // world -> view transformation
+        // "view matrix"
+        float view[4][4];
+        mattranslate(view, 0, 0, 0); // TODO (glm::lookAt)
+
+        // model -> world transformation
+        // "model matrix"
+        float model_to_world_center[4][4];
+        mattranslate(model_to_world_center, 0, 0, 0);
+        float model[4][4];
         float scale[4][4];
-        matscale(scale, 0.05);
+        matscale(scale, 1);
+        matmul(scale, model_to_world_center, model);
 
-        float rotx[4][4];
-        matrotatex(rotx, rx);
-
-        float roty[4][4];
+        // transformations in model space
+        float rotz[4][4], roty[4][4], rotx[4][4];
+        matrotatez(rotz, rz);
         matrotatey(roty, ry);
+        matrotatex(rotx, rx);
+        float temp1[4][4], mtrans[4][4];
+        matmul(rotz, roty, temp1);
+        matmul(temp1, rotx, mtrans);
 
-        float rotz[4][4];
-        matrotatey(rotz, rz);
+        // v' = P V M Mt v
+        printf("mtrans\n");
+        matprint(mtrans);
 
-        float m1[4][4];
-        float m2[4][4];
-        float m3[4][4];
-        float mvp[4][4];
+        printf("model\n");
+        matprint(model);
 
-        matmul(translate, scale, m1);
-        matmul(m1, rotz, m2);
-        matmul(m2, roty, m3);
-        matmul(m3, rotx, mvp);
+        printf("view\n");
+        matprint(view);
+
+        printf("projection\n");
+        matprint(projection);
+
+        float temp2[4][4], mvp[4][4];
+        matmul(projection, view, temp1);
+        matmul(temp1, model, temp2);
+        matmul(temp2, mtrans, mvp);
+
+        printf("mvp\n");
+        matprint(mvp);
 
         GLfloat *mvpp = &mvp[0][0];
         glUniformMatrix4fv(glGetUniformLocation(program, "mvp"), 1, GL_FALSE,
@@ -250,7 +335,8 @@ int main(int argc, const char *argv[]) {
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glDrawArrays(GL_POINTS, 0, obj.v.n);
+        //        glDrawArrays(GL_POINTS, 0, obj.v.n);
+        glDrawArrays(GL_LINES, 0, 2 * nlines);
 
         SDL_GL_SwapWindow(window);
     }
