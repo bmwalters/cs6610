@@ -19,10 +19,6 @@ const int VERBOSE = 1;
 
 const float PI = 3.1415926535;
 
-static float min(float a, float b) { return (a < b) ? a : b; }
-
-static float max(float a, float b) { return (a > b) ? a : b; }
-
 /* column-major order */
 
 static void matmul(float lm[4][4], float rm[4][4], float outm[4][4]) {
@@ -282,8 +278,8 @@ int main(int argc, const char *argv[]) {
                obj_max.z);
 
     float obj_fill_scale =
-        1 / min(min(obj_max.x - obj_min.x, obj_max.y - obj_min.y),
-                obj_max.z - obj_min.z);
+        1 / fminf(fminf(obj_max.x - obj_min.x, obj_max.y - obj_min.y),
+                  obj_max.z - obj_min.z);
 
     if (VERBOSE)
         printf("obj_fill_scale = %f\n", obj_fill_scale);
