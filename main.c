@@ -289,11 +289,11 @@ int main(int argc, const char *argv[]) {
     float obj_center_zoff = -(fabs(obj_max.z) - fabs(obj_min.z)) / 2;
 
     // TODO
-    float pl = -500;
-    float pr = 500;
-    float pb = -500;
-    float pt = 500;
-    float pf = 500;
+    float pl = -1;
+    float pr = 1;
+    float pb = -1;
+    float pt = 1;
+    float pf = -2;
     float pn = 0.1;
 
     float yaw = PI / 2;
@@ -339,13 +339,15 @@ int main(int argc, const char *argv[]) {
         // "projection matrix"
         // TODO
         float ortho[4][4];
-        //        matortho(ortho, pl, pr, pb, pt, pf, pn);
         matscale(ortho, 1);
+        matortho(ortho, pl, pr, pb, pt, pf, pn);
         float perspective[4][4];
         matscale(perspective, 1);
-        /* matperspective(perspective, pf, pn); */
+        matperspective(perspective, pf, pn);
         float projection[4][4];
         matmul(ortho, perspective, projection);
+
+        matprint(projection);
 
         // world -> view transformation
         // "view matrix"
@@ -358,6 +360,8 @@ int main(int argc, const char *argv[]) {
 
         // model -> world transformation
         // "model matrix"
+        float obj_trans[4][4];
+        mattranslate(obj_trans, 0, 0, 0); // -0.6
         float obj_rot[4][4];
         matrotatex(obj_rot, PI / 2);
         float obj_scale[4][4];
@@ -366,8 +370,9 @@ int main(int argc, const char *argv[]) {
         mattranslate(obj_center, obj_center_xoff, obj_center_yoff,
                      obj_center_zoff);
 
-        float temp1[4][4], model[4][4];
-        matmul(obj_rot, obj_scale, temp1);
+        float temp1[4][4], temp2[4][4], model[4][4];
+        matmul(obj_trans, obj_rot, temp2);
+        matmul(temp2, obj_scale, temp1);
         matmul(temp1, obj_center, model);
 
         // mvp. v' = P V M v
