@@ -86,6 +86,12 @@ static void vecnormalize(float v[3]) {
     v[2] /= mag;
 }
 
+static void vecscale(float v[3], float scale) {
+    v[0] *= scale;
+    v[1] *= scale;
+    v[2] *= scale;
+}
+
 static float vecdot(float u[3], float v[3]) {
     return u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
 }
@@ -121,19 +127,14 @@ static void veceulerangles(float out[3], float yaw, float pitch) {
     out[2] = sinf(yaw) * cosf(pitch);
 }
 
-static void matperspective(float out[4][4], float f, float n) {
-    float m[4][4] = {
-        {n, 0, 0, 0}, {0, n, 0, 0}, {0, 0, n + f, 1}, {0, 0, -f * n, 0}};
-    memcpy(out, m, sizeof(float[4][4]));
-}
-
-static void matortho(float out[4][4], float l, float r, float b, float t,
-                     float f, float n) {
-    float m[4][4] = {
-        {2 / (r - l), 0, 0, 0},
-        {0, 2 / (t - b), 0, 0},
-        {0, 0, 2 / (f - n), 0},
-        {-(r + l) / (r - l), -(t + b) / (t - b), -(f + n) / (f - n), 1}};
+static void matperspective(float out[4][4], float fovy, float aspect,
+                           float z_near, float z_far) {
+    const float S = 1 / tan(fovy / 2);
+    const float m[4][4] = {{S / aspect, 0, 0, 0},
+                           {0, S, 0, 0},
+                           {0, 0, -(z_far + z_near) / (z_far - z_near),
+                            -(2 * z_far * z_near) / (z_far - z_near)},
+                           {0, 0, -1, 0}};
     memcpy(out, m, sizeof(float[4][4]));
 }
 
@@ -288,16 +289,15 @@ int main(int argc, const char *argv[]) {
     float obj_center_yoff = -(fabs(obj_max.y) - fabs(obj_min.y)) / 2;
     float obj_center_zoff = -(fabs(obj_max.z) - fabs(obj_min.z)) / 2;
 
-    // TODO
-    float pl = -1;
-    float pr = 1;
-    float pb = -1;
-    float pt = 1;
-    float pf = -2;
-    float pn = 0.1;
+    const float z_near = 1; // TODO: Fix bugs when z_near = 0.1
+    const float z_far = 100;
+
+    float fovy = PI / 4;
 
     float yaw = PI / 2;
     float pitch = 0;
+
+    float cam_dist = 1;
 
     glViewport(0, 0, W, H);
 
@@ -323,10 +323,14 @@ int main(int argc, const char *argv[]) {
                     yaw += event.motion.xrel * 0.005;
                     pitch += event.motion.yrel * 0.005;
                 } else if (event.motion.state & SDL_BUTTON_RMASK) {
-                    // TODO
+                    cam_dist += event.motion.yrel * 0.005;
                 }
                 break;
             }
+            case SDL_MOUSEWHEEL:
+                fovy =
+                    fminf(PI / 4, fmaxf(PI / 32, fovy - event.wheel.y * 0.02));
+                break;
             case SDL_QUIT:
                 running = 0;
                 break;
@@ -335,19 +339,11 @@ int main(int argc, const char *argv[]) {
             }
         }
 
-        // view -> canonical view volume projection
+        // view -> clip space transformation
         // "projection matrix"
-        // TODO
-        float ortho[4][4];
-        matscale(ortho, 1);
-        matortho(ortho, pl, pr, pb, pt, pf, pn);
-        float perspective[4][4];
-        matscale(perspective, 1);
-        matperspective(perspective, pf, pn);
         float projection[4][4];
-        matmul(ortho, perspective, projection);
-
-        matprint(projection);
+        matscale(projection, 1);
+        matperspective(projection, fovy, (float)W / (float)H, z_near, z_far);
 
         // world -> view transformation
         // "view matrix"
@@ -356,6 +352,7 @@ int main(int argc, const char *argv[]) {
         float up[3] = {0, 1, 0};
         float eye[3];
         veceulerangles(eye, yaw, pitch);
+        vecscale(eye, cam_dist);
         matview(view, eye, zero, up);
 
         // model -> world transformation
