@@ -166,6 +166,63 @@ static void matperspective(float out[4][4], float fovy, float aspect,
     memcpy(out, m, sizeof(float[4][4]));
 }
 
+static void mat4tomat3(float out[3][3], float in[4][4]) {
+    out[0][0] = in[0][0];
+    out[0][1] = in[0][1];
+    out[0][2] = in[0][2];
+    out[1][0] = in[1][0];
+    out[1][1] = in[1][1];
+    out[1][2] = in[1][2];
+    out[2][0] = in[2][0];
+    out[2][1] = in[2][1];
+    out[2][2] = in[2][2];
+}
+
+static void matinversetranspose(float out[3][3], const float m[3][3]) {
+    float Determinant = +m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
+                        m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+                        m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+
+    float Inverse[3][3];
+    Inverse[0][0] = +(m[1][1] * m[2][2] - m[2][1] * m[1][2]) / Determinant;
+    Inverse[0][1] = -(m[1][0] * m[2][2] - m[2][0] * m[1][2]) / Determinant;
+    Inverse[0][2] = +(m[1][0] * m[2][1] - m[2][0] * m[1][1]) / Determinant;
+    Inverse[1][0] = -(m[0][1] * m[2][2] - m[2][1] * m[0][2]) / Determinant;
+    Inverse[1][1] = +(m[0][0] * m[2][2] - m[2][0] * m[0][2]) / Determinant;
+    Inverse[1][2] = -(m[0][0] * m[2][1] - m[2][0] * m[0][1]) / Determinant;
+    Inverse[2][0] = +(m[0][1] * m[1][2] - m[1][1] * m[0][2]) / Determinant;
+    Inverse[2][1] = -(m[0][0] * m[1][2] - m[1][0] * m[0][2]) / Determinant;
+    Inverse[2][2] = +(m[0][0] * m[1][1] - m[1][0] * m[0][1]) / Determinant;
+
+    memcpy(out, Inverse, sizeof(float[3][3]));
+}
+
+static void mat4mulv4(float out[4], const float m[4][4], const float v[4]) {
+    out[0] = v[0] * m[0][0] + v[1] * m[1][0] + v[2] * m[2][0] + v[3] * m[3][0];
+    out[1] = v[0] * m[0][1] + v[1] * m[1][1] + v[2] * m[2][1] + v[3] * m[3][1];
+    out[2] = v[0] * m[0][2] + v[1] * m[1][2] + v[2] * m[2][2] + v[3] * m[3][2];
+    out[3] = v[0] * m[0][3] + v[1] * m[1][3] + v[2] * m[2][3] + v[3] * m[3][3];
+}
+
+static void test_mat4mulv4() {
+    float m[4][4] = {
+        {4, 1, 0, 0},
+        {0, 0, 3, 2},
+        {1, 1, 1, 1},
+        {0, 0, 2, 0},
+    };
+
+    float v[4] = {3, 2, 4, 1};
+
+    float out[4];
+    mat4mulv4(out, m, v);
+
+    assert(out[0] == 16);
+    assert(out[1] == 7);
+    assert(out[2] == 12);
+    assert(out[3] == 8);
+}
+
 static void matprint(float m[4][4]) {
     printf("%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n", m[0][0],
            m[1][0], m[2][0], m[3][0], m[0][1], m[1][1], m[2][1], m[3][1],
@@ -177,6 +234,8 @@ static void test_vec() {
     test_vecmag();
     test_veccross();
 }
+
+static void test_mat() { test_mat4mulv4(); }
 
 static void bounding_box(const struct obj_obj *obj, struct obj_vertex *outmin,
                          struct obj_vertex *outmax) {
@@ -213,7 +272,10 @@ static bool naive_make_triangle_buffer(const struct obj_obj *obj,
                                        void **out_norm_buffer,
                                        size_t *out_norm_buffer_size);
 
-static void testmain() { test_vec(); }
+static void testmain() {
+    test_vec();
+    test_mat();
+}
 
 int main(int argc, const char *argv[]) {
     if (DEBUG)
@@ -366,8 +428,15 @@ int main(int argc, const char *argv[]) {
 
     float cam_dist = 1;
 
-    glViewport(0, 0, W, H);
+    float light_yaw = PI / 4;
+    float light_pitch = PI / 8;
+    float light_dist = 3;
+
     glEnable(GL_DEPTH_TEST);
+    glViewport(0, 0, W, H);
+    glClearColor(0, 0, 0, 1);
+
+    const unsigned char *key_state = SDL_GetKeyboardState(NULL);
 
     int running = 1;
     while (running) {
@@ -388,8 +457,13 @@ int main(int argc, const char *argv[]) {
                 break;
             case SDL_MOUSEMOTION: {
                 if (event.motion.state & SDL_BUTTON_LMASK) {
-                    yaw += event.motion.xrel * 0.005;
-                    pitch += event.motion.yrel * 0.005;
+                    if (key_state[SDL_SCANCODE_LCTRL]) {
+                        light_yaw += event.motion.xrel * 0.005;
+                        light_pitch += event.motion.yrel * 0.005;
+                    } else {
+                        yaw += event.motion.xrel * 0.005;
+                        pitch += event.motion.yrel * 0.005;
+                    }
                 } else if (event.motion.state & SDL_BUTTON_RMASK) {
                     cam_dist += event.motion.yrel * 0.005;
                 }
@@ -451,7 +525,31 @@ int main(int argc, const char *argv[]) {
         glUniformMatrix4fv(glGetUniformLocation(program, "mvp"), 1, GL_FALSE,
                            &mvp[0][0]);
 
-        glClearColor(0, 0, 0, 1);
+        float mv_normals[3][3];
+        mat4tomat3(mv_normals, mv);
+        matinversetranspose(mv_normals, mv_normals);
+        glUniformMatrix3fv(glGetUniformLocation(program, "mv_normals"), 1,
+                           GL_FALSE, &mv_normals[0][0]);
+
+        glUniform1f(glGetUniformLocation(program, "ambient_intensity"), 0.2);
+
+        float light_pos[3];
+        veceulerangles(light_pos, light_yaw, light_pitch);
+        vecscale(light_pos, light_dist);
+        float light_pos_h[4] = {light_pos[0], light_pos[1], light_pos[2], 1};
+        float light_pos_view_h[4];
+        mat4mulv4(light_pos_view_h, view, light_pos_h);
+        vecscale(light_pos_view_h, 1 / light_pos_view_h[3]);
+        float light_pos_view[3] = {light_pos_view_h[0], light_pos_view_h[1],
+                                   light_pos_view_h[2]};
+        glUniform3fv(glGetUniformLocation(program, "light_pos_view"), 1,
+                     &light_pos_view[0]);
+        glUniform1f(glGetUniformLocation(program, "light_intensity"), 0.8);
+
+        glUniform3f(glGetUniformLocation(program, "mat_diffuse"), 1, 0, 0);
+        glUniform3f(glGetUniformLocation(program, "mat_specular"), 1, 1, 1);
+        glUniform1f(glGetUniformLocation(program, "mat_phongalpha"), 100);
+
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glDrawArrays(GL_TRIANGLES, 0, triangle_count * 3);
