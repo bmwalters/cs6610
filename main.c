@@ -172,6 +172,10 @@ static void bounding_box(const struct obj_obj *obj, struct obj_vertex *outmin,
 static bool compile_shader_file(const char *const filename, GLuint shader);
 static bool compile_shader_program(GLuint program);
 
+static bool naive_make_triangle_buffer(const struct obj_obj *obj,
+                                       size_t *out_count, void **out_buffer,
+                                       size_t *out_buffer_size);
+
 int main(int argc, const char *argv[]) {
     if (argc < 2) {
         fprintf(stderr, "Usage: %s [file.obj]\n", argv[0]);
@@ -250,10 +254,24 @@ int main(int argc, const char *argv[]) {
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
 
+    /*
+    GLuint ebuffer;
+    glGenBuffers(1, &ebuffer);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebuffer);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, obj.vf.n * sizeof(struct obj_triface),
+                 obj.vf.v, GL_STATIC_DRAW);
+    */
+
+    size_t triangle_count;
+    void *triangle_buffer;
+    size_t triangle_buffer_size;
+    naive_make_triangle_buffer(&obj, &triangle_count, &triangle_buffer,
+                               &triangle_buffer_size);
+
     GLuint vbo;
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, obj.v.n * sizeof(struct obj_vertex), obj.v.v,
+    glBufferData(GL_ARRAY_BUFFER, triangle_buffer_size, triangle_buffer,
                  GL_STATIC_DRAW);
 
     GLuint pos = glGetAttribLocation(program, "pos");
@@ -376,7 +394,8 @@ int main(int argc, const char *argv[]) {
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glDrawArrays(GL_POINTS, 0, obj.v.n);
+        glDrawArrays(GL_TRIANGLES, 0, triangle_count * 3);
+        // glDrawElements(GL_TRIANGLES, obj.vf.n * 3, GL_UNSIGNED_INT, 0);
 
         SDL_GL_SwapWindow(window);
     }
@@ -450,4 +469,29 @@ static bool compile_shader_program(GLuint program) {
     glDeleteShader(fs);
 
     return program_linked == GL_TRUE;
+}
+
+// TODO: replace with glDrawElements etc.
+static bool naive_make_triangle_buffer(const struct obj_obj *obj,
+                                       size_t *out_count, void **out_buffer,
+                                       size_t *out_buffer_size) {
+    size_t tri_size = sizeof(float[3][3]);
+    size_t n_tris = obj->vf.n;
+    float *buffer = calloc(n_tris, tri_size);
+    if (buffer == NULL)
+        return false;
+
+    for (size_t tri = 0; tri < n_tris; tri++) {
+        for (size_t vert = 0; vert < 3; vert++) {
+            size_t verti = obj->vf.v[tri].v[vert] - 1;
+            memcpy(buffer + tri * 9 + vert * 3, &obj->v.v[verti],
+                   sizeof(float[3]));
+        }
+    }
+
+    *out_count = n_tris;
+    *out_buffer = buffer;
+    *out_buffer_size = n_tris * tri_size;
+
+    return true;
 }
