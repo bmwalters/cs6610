@@ -1,4 +1,4 @@
-#include "SDL_video.h"
+#include <assert.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -10,6 +10,7 @@
 #include <GL/glew.h>
 #endif
 #include <SDL.h>
+#include <SDL_video.h>
 
 #include "obj.h"
 
@@ -74,8 +75,18 @@ static void matrotatez(float out[4][4], float theta) {
     memcpy(out, m, sizeof(float[4][4]));
 }
 
-static float vecmag(float v[3]) {
+static float vecmag(const float v[3]) {
     return sqrtf(powf(v[0], 2) + powf(v[1], 2) + powf(v[2], 2));
+}
+
+static void assert_close(float a, float b) {
+    const float epsilon = 0.1f;
+    assert((a - b) <= epsilon);
+}
+
+static void test_vecmag() {
+    float v[3] = {2, 3, 6};
+    assert_close(vecmag(v), 7);
 }
 
 static void vecnormalize(float v[3]) {
@@ -91,14 +102,32 @@ static void vecscale(float v[3], float scale) {
     v[2] *= scale;
 }
 
-static float vecdot(float u[3], float v[3]) {
+static float vecdot(const float u[3], const float v[3]) {
     return u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
 }
 
-static void veccross(float out[3], float u[3], float v[3]) {
+static void veccross(float out[3], const float u[3], const float v[3]) {
     out[0] = u[1] * v[2] - u[2] * v[1];
     out[1] = u[2] * v[0] - u[0] * v[2];
     out[2] = u[0] * v[1] - u[1] * v[0];
+}
+
+static void test_veccross() {
+    float out[3];
+
+    float u1[3] = {1, 0, 0};
+    float v1[3] = {0, 1, 0};
+    veccross(out, u1, v1);
+    assert_close(out[0], 0);
+    assert_close(out[1], 0);
+    assert_close(out[2], 1);
+
+    float u2[3] = {-7, 3, 15};
+    float v2[3] = {38, -3, -1};
+    veccross(out, u2, v2);
+    assert_close(out[0], 42);
+    assert_close(out[1], 563);
+    assert_close(out[2], -93);
 }
 
 static void matview(float out[4][4], float eye[3], float target[3],
@@ -144,6 +173,11 @@ static void matprint(float m[4][4]) {
            m[3][3]);
 }
 
+static void test_vec() {
+    test_vecmag();
+    test_veccross();
+}
+
 static void bounding_box(const struct obj_obj *obj, struct obj_vertex *outmin,
                          struct obj_vertex *outmax) {
     if (obj->v.n < 1)
@@ -179,7 +213,12 @@ static bool naive_make_triangle_buffer(const struct obj_obj *obj,
                                        void **out_norm_buffer,
                                        size_t *out_norm_buffer_size);
 
+static void testmain() { test_vec(); }
+
 int main(int argc, const char *argv[]) {
+    if (DEBUG)
+        testmain();
+
     if (argc < 2) {
         fprintf(stderr, "Usage: %s [file.obj]\n", argv[0]);
         return 1;
