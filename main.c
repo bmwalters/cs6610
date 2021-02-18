@@ -173,8 +173,11 @@ static bool compile_shader_file(const char *const filename, GLuint shader);
 static bool compile_shader_program(GLuint program);
 
 static bool naive_make_triangle_buffer(const struct obj_obj *obj,
-                                       size_t *out_count, void **out_buffer,
-                                       size_t *out_buffer_size);
+                                       size_t *out_tri_count,
+                                       void **out_pos_buffer,
+                                       size_t *out_pos_buffer_size,
+                                       void **out_norm_buffer,
+                                       size_t *out_norm_buffer_size);
 
 int main(int argc, const char *argv[]) {
     if (argc < 2) {
@@ -263,15 +266,28 @@ int main(int argc, const char *argv[]) {
     */
 
     size_t triangle_count;
-    void *triangle_buffer;
-    size_t triangle_buffer_size;
-    naive_make_triangle_buffer(&obj, &triangle_count, &triangle_buffer,
-                               &triangle_buffer_size);
+    void *triangle_pos_buffer;
+    size_t triangle_pos_buffer_size;
+    void *triangle_norm_buffer;
+    size_t triangle_norm_buffer_size;
+    naive_make_triangle_buffer(&obj, &triangle_count, &triangle_pos_buffer,
+                               &triangle_pos_buffer_size, &triangle_norm_buffer,
+                               &triangle_norm_buffer_size);
 
-    GLuint vbo;
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, triangle_buffer_size, triangle_buffer,
+    GLuint vbo_norm;
+    glGenBuffers(1, &vbo_norm);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_norm);
+    glBufferData(GL_ARRAY_BUFFER, triangle_norm_buffer_size,
+                 triangle_norm_buffer, GL_STATIC_DRAW);
+
+    GLuint normal = glGetAttribLocation(program, "normal");
+    glEnableVertexAttribArray(normal);
+    glVertexAttribPointer(normal, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+    GLuint vbo_pos;
+    glGenBuffers(1, &vbo_pos);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_pos);
+    glBufferData(GL_ARRAY_BUFFER, triangle_pos_buffer_size, triangle_pos_buffer,
                  GL_STATIC_DRAW);
 
     GLuint pos = glGetAttribLocation(program, "pos");
@@ -310,6 +326,7 @@ int main(int argc, const char *argv[]) {
     float cam_dist = 1;
 
     glViewport(0, 0, W, H);
+    glEnable(GL_DEPTH_TEST);
 
     int running = 1;
     while (running) {
@@ -383,13 +400,15 @@ int main(int argc, const char *argv[]) {
         matmul(temp1, obj_center, model);
 
         // mvp. v' = P V M v
+        float mv[4][4];
         float mvp[4][4];
-        matmul(projection, view, temp1);
-        matmul(temp1, model, mvp);
+        matmul(view, model, mv);
+        matmul(projection, mv, mvp);
 
-        GLfloat *mvpp = &mvp[0][0];
+        glUniformMatrix4fv(glGetUniformLocation(program, "mv"), 1, GL_FALSE,
+                           &mv[0][0]);
         glUniformMatrix4fv(glGetUniformLocation(program, "mvp"), 1, GL_FALSE,
-                           mvpp);
+                           &mvp[0][0]);
 
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -473,25 +492,48 @@ static bool compile_shader_program(GLuint program) {
 
 // TODO: replace with glDrawElements etc.
 static bool naive_make_triangle_buffer(const struct obj_obj *obj,
-                                       size_t *out_count, void **out_buffer,
-                                       size_t *out_buffer_size) {
+                                       size_t *out_tri_count,
+                                       void **out_pos_buffer,
+                                       size_t *out_pos_buffer_size,
+                                       void **out_norm_buffer,
+                                       size_t *out_norm_buffer_size) {
+    if (obj->vf.n != obj->nf.n) {
+        fprintf(stderr, "Not sure how to handle obj with #vf != #nf\n");
+        return false;
+    }
+
     size_t tri_size = sizeof(float[3][3]);
     size_t n_tris = obj->vf.n;
-    float *buffer = calloc(n_tris, tri_size);
-    if (buffer == NULL)
+
+    float *pos_buffer = calloc(n_tris, tri_size);
+    if (pos_buffer == NULL) {
+        fprintf(stderr, "Failed to allocate triangle pos buffer\n");
         return false;
+    }
+
+    float *norm_buffer = calloc(n_tris, tri_size);
+    if (norm_buffer == NULL) {
+        fprintf(stderr, "Failed to allocate triangle norm buffer\n");
+        return false;
+    }
 
     for (size_t tri = 0; tri < n_tris; tri++) {
         for (size_t vert = 0; vert < 3; vert++) {
             size_t verti = obj->vf.v[tri].v[vert] - 1;
-            memcpy(buffer + tri * 9 + vert * 3, &obj->v.v[verti],
+            memcpy(pos_buffer + tri * 9 + vert * 3, &obj->v.v[verti],
+                   sizeof(float[3]));
+
+            size_t nverti = obj->nf.v[tri].v[vert] - 1;
+            memcpy(norm_buffer + tri * 9 + vert * 3, &obj->n.v[nverti],
                    sizeof(float[3]));
         }
     }
 
-    *out_count = n_tris;
-    *out_buffer = buffer;
-    *out_buffer_size = n_tris * tri_size;
+    *out_tri_count = n_tris;
+    *out_pos_buffer = pos_buffer;
+    *out_pos_buffer_size = n_tris * tri_size;
+    *out_norm_buffer = norm_buffer;
+    *out_norm_buffer_size = n_tris * tri_size;
 
     return true;
 }
