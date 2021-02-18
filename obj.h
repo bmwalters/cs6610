@@ -29,6 +29,9 @@ struct obj_obj {
     /* vertices */
     struct obj_vertex_vector v;
 
+    /* normals */
+    struct obj_vertex_vector n;
+
     /* vertex faces */
     struct obj_triface_vector vf;
 

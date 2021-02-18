@@ -80,6 +80,7 @@ static bool obj_triface_vector_add(struct obj_triface_vector *vec,
 
 void obj_init(struct obj_obj *obj) {
     obj_vertex_vector_init(&obj->v);
+    obj_vertex_vector_init(&obj->n);
     obj_triface_vector_init(&obj->vf);
     obj_triface_vector_init(&obj->tf);
     obj_triface_vector_init(&obj->nf);
@@ -87,6 +88,7 @@ void obj_init(struct obj_obj *obj) {
 
 void obj_release(struct obj_obj *obj) {
     obj_vertex_vector_release(&obj->v);
+    obj_vertex_vector_release(&obj->n);
     obj_triface_vector_release(&obj->vf);
     obj_triface_vector_release(&obj->tf);
     obj_triface_vector_release(&obj->nf);
@@ -106,6 +108,14 @@ bool obj_read(struct obj_obj *obj, FILE *file) {
                 return false;
 
             if (!obj_vertex_vector_add(&obj->v, &vertex))
+                return false;
+        } else if (line[0] == 'v' && line[1] == 'n' && line[2] == ' ') {
+            struct obj_vertex normal;
+            if (sscanf(line, "vn %f %f %f", &normal.x, &normal.y, &normal.z) ==
+                EOF)
+                return false;
+
+            if (!obj_vertex_vector_add(&obj->n, &normal))
                 return false;
         } else if (line[0] == 'f' && line[1] == ' ') {
             if (!parse_face_line(obj, line))
