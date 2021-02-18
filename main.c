@@ -195,7 +195,10 @@ int main(int argc, const char *argv[]) {
     fclose(obj_file);
 
     if (VERBOSE)
-        printf("Loaded '%s' with %d vertices\n", obj_filename, obj.v.n);
+        printf(
+            "Loaded '%s'. Geometry:\n\t%zu "
+            "vertices\n\t%zu faces\n\t%zu normal faces\n\t%zu texture faces\n",
+            obj_filename, obj.v.n, obj.vf.n, obj.nf.n, obj.tf.n);
 
     SDL_Init(SDL_INIT_VIDEO);
 

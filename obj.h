@@ -9,15 +9,34 @@ struct obj_vertex {
     float z;
 };
 
+struct obj_triface {
+    int v[3];
+};
+
 struct obj_vertex_vector {
-    unsigned int n;
-    unsigned int c;
+    size_t n;
+    size_t c;
     struct obj_vertex *v;
+};
+
+struct obj_triface_vector {
+    size_t n;
+    size_t c;
+    struct obj_triface *v;
 };
 
 struct obj_obj {
     /* vertices */
     struct obj_vertex_vector v;
+
+    /* vertex faces */
+    struct obj_triface_vector vf;
+
+    /* texture faces */
+    struct obj_triface_vector tf;
+
+    /* normal faces */
+    struct obj_triface_vector nf;
 };
 
 void obj_init(struct obj_obj *obj);
