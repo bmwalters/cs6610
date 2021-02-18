@@ -137,9 +137,18 @@ static bool parse_face_line(struct obj_obj *obj, const char *line) {
     bool has_textures = false;
     bool has_normals = false;
 
+    bool read_number_last = false;
+
     while (true) {
         switch (*c) {
         case '/':
+            assert(kinds_read < 3);
+            if (!read_number_last) {
+                assert(!(kinds_read == 1 && has_textures));
+                assert(!(kinds_read == 2 && has_normals));
+                kinds_read++;
+            }
+            read_number_last = false;
             c++;
             break;
         case ' ':
@@ -175,6 +184,7 @@ static bool parse_face_line(struct obj_obj *obj, const char *line) {
 
             if (should_terminate)
                 return true;
+            read_number_last = false;
             c++;
             break;
         }
@@ -189,6 +199,7 @@ static bool parse_face_line(struct obj_obj *obj, const char *line) {
 
             assert(kinds_read < 3);
             faces_by_kind[kinds_read].v[elems_read] = val;
+            read_number_last = true;
             kinds_read++;
 
             if (elems_read == 0 && kinds_read == 2)

@@ -270,9 +270,11 @@ int main(int argc, const char *argv[]) {
     size_t triangle_pos_buffer_size;
     void *triangle_norm_buffer;
     size_t triangle_norm_buffer_size;
-    naive_make_triangle_buffer(&obj, &triangle_count, &triangle_pos_buffer,
-                               &triangle_pos_buffer_size, &triangle_norm_buffer,
-                               &triangle_norm_buffer_size);
+    if (!naive_make_triangle_buffer(&obj, &triangle_count, &triangle_pos_buffer,
+                                    &triangle_pos_buffer_size,
+                                    &triangle_norm_buffer,
+                                    &triangle_norm_buffer_size))
+        return 1;
 
     GLuint vbo_norm;
     glGenBuffers(1, &vbo_norm);
