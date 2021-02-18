@@ -14,7 +14,6 @@
 #include "obj.h"
 
 const int DEBUG = 1;
-const int DEBUG_AXES = 0;
 const int VERBOSE = 1;
 
 const float PI = 3.1415926535;
@@ -254,18 +253,8 @@ int main(int argc, const char *argv[]) {
     GLuint vbo;
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-
-#define nlines 3
-    if (DEBUG_AXES) {
-        float lines[nlines][3][3] = {{{0, 0, 0}, {1, 0, 0}},
-                                     {{0, 0, 0}, {0, 1, 0}},
-                                     {{0, 0, 0}, {0, 0, 1}}};
-        glBufferData(GL_ARRAY_BUFFER, nlines * 6 * sizeof(float), lines,
-                     GL_STATIC_DRAW);
-    } else {
-        glBufferData(GL_ARRAY_BUFFER, obj.v.n * sizeof(struct obj_vertex),
-                     obj.v.v, GL_STATIC_DRAW);
-    }
+    glBufferData(GL_ARRAY_BUFFER, obj.v.n * sizeof(struct obj_vertex), obj.v.v,
+                 GL_STATIC_DRAW);
 
     GLuint pos = glGetAttribLocation(program, "pos");
     glEnableVertexAttribArray(pos);
@@ -387,10 +376,7 @@ int main(int argc, const char *argv[]) {
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        if (DEBUG_AXES)
-            glDrawArrays(GL_LINES, 0, 2 * nlines);
-        else
-            glDrawArrays(GL_POINTS, 0, obj.v.n);
+        glDrawArrays(GL_POINTS, 0, obj.v.n);
 
         SDL_GL_SwapWindow(window);
     }
