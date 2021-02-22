@@ -263,12 +263,12 @@ static void bounding_box(const struct obj_obj *obj, struct obj_vertex *outmin,
 static bool compile_shader_file(const char *const filename, GLuint shader);
 static bool compile_shader_program(GLuint program);
 
-static bool naive_make_triangle_buffer(const struct obj_obj *obj,
-                                       size_t *out_tri_count,
-                                       void **out_pos_buffer,
-                                       size_t *out_pos_buffer_size,
-                                       void **out_norm_buffer,
-                                       size_t *out_norm_buffer_size);
+static bool
+naive_make_triangle_buffer(const struct obj_obj *obj, size_t *out_tri_count,
+                           void **out_pos_buffer, size_t *out_pos_buffer_size,
+                           void **out_norm_buffer, size_t *out_norm_buffer_size,
+                           void **out_texcoord_buffer,
+                           size_t *out_texcoord_buffer_size);
 
 static void testmain() {
     test_vec();
@@ -368,10 +368,13 @@ int main(int argc, const char *argv[]) {
     size_t triangle_pos_buffer_size;
     void *triangle_norm_buffer;
     size_t triangle_norm_buffer_size;
-    if (!naive_make_triangle_buffer(&obj, &triangle_count, &triangle_pos_buffer,
-                                    &triangle_pos_buffer_size,
-                                    &triangle_norm_buffer,
-                                    &triangle_norm_buffer_size))
+    void *triangle_texcoord_buffer;
+    size_t triangle_texcoord_buffer_size;
+    if (!naive_make_triangle_buffer(
+            &obj, &triangle_count, &triangle_pos_buffer,
+            &triangle_pos_buffer_size, &triangle_norm_buffer,
+            &triangle_norm_buffer_size, &triangle_texcoord_buffer,
+            &triangle_texcoord_buffer_size))
         return 1;
 
     GLuint vbo_norm;
@@ -394,7 +397,39 @@ int main(int argc, const char *argv[]) {
     glEnableVertexAttribArray(pos);
     glVertexAttribPointer(pos, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
+    GLuint texture;
+    glGenTextures(1, &texture);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // TODO
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, obj.m.v[0].map_Kd.w,
+                 obj.m.v[0].map_Kd.h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                 obj.m.v[0].map_Kd.v);
+    // glGenerateMipmap(GL_TEXTURE_2D); TODO
+
+    GLuint vbo_texcoord;
+    glGenBuffers(1, &vbo_texcoord);
+    glBindBuffer(GL_ARRAY_BUFFER, vbo_texcoord);
+    glBufferData(GL_ARRAY_BUFFER, triangle_texcoord_buffer_size,
+                 triangle_texcoord_buffer, GL_STATIC_DRAW);
+
+    GLuint texcoord = glGetAttribLocation(program, "texcoord");
+    glEnableVertexAttribArray(texcoord);
+    glVertexAttribPointer(texcoord, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
     glUseProgram(program);
+
+    // TODO: make sure this changes after shader recomp
+    glUniform1i(glGetUniformLocation(program, "tex"), 0);
+
+    // printf("%f %f %f\n", obj.m.v[0].Kd[0], obj.m.v[0].Kd[1],
+    // obj.m.v[0].Kd[2]);
+    printf("%d %d %d %d\n", obj.m.v[0].map_Kd.v[0], obj.m.v[0].map_Kd.v[1],
+           obj.m.v[0].map_Kd.v[2], obj.m.v[0].map_Kd.v[3]);
+    glUniform3fv(glGetUniformLocation(program, "mulKd"), 1, &obj.m.v[0].Kd[0]);
 
     struct obj_vertex obj_min, obj_max;
     bounding_box(&obj, &obj_min, &obj_max);
@@ -627,12 +662,12 @@ static bool compile_shader_program(GLuint program) {
 }
 
 // TODO: replace with glDrawElements etc.
-static bool naive_make_triangle_buffer(const struct obj_obj *obj,
-                                       size_t *out_tri_count,
-                                       void **out_pos_buffer,
-                                       size_t *out_pos_buffer_size,
-                                       void **out_norm_buffer,
-                                       size_t *out_norm_buffer_size) {
+static bool
+naive_make_triangle_buffer(const struct obj_obj *obj, size_t *out_tri_count,
+                           void **out_pos_buffer, size_t *out_pos_buffer_size,
+                           void **out_norm_buffer, size_t *out_norm_buffer_size,
+                           void **out_texcoord_buffer,
+                           size_t *out_texcoord_buffer_size) {
     if (obj->vf.n != obj->nf.n) {
         fprintf(stderr, "Not sure how to handle obj with #vf != #nf\n");
         return false;
@@ -653,6 +688,12 @@ static bool naive_make_triangle_buffer(const struct obj_obj *obj,
         return false;
     }
 
+    float *texcoord_buffer = calloc(n_tris, tri_size);
+    if (texcoord_buffer == NULL) {
+        fprintf(stderr, "Failed to allocate triangle texcoord buffer\n");
+        return false;
+    }
+
     for (size_t tri = 0; tri < n_tris; tri++) {
         for (size_t vert = 0; vert < 3; vert++) {
             size_t verti = obj->vf.v[tri].v[vert] - 1;
@@ -662,6 +703,10 @@ static bool naive_make_triangle_buffer(const struct obj_obj *obj,
             size_t nverti = obj->nf.v[tri].v[vert] - 1;
             memcpy(norm_buffer + tri * 9 + vert * 3, &obj->n.v[nverti],
                    sizeof(float[3]));
+
+            size_t texcoordi = obj->tf.v[tri].v[vert] - 1;
+            memcpy(texcoord_buffer + tri * 9 + vert * 3, &obj->t.v[texcoordi],
+                   sizeof(float[3]));
         }
     }
 
@@ -670,6 +715,8 @@ static bool naive_make_triangle_buffer(const struct obj_obj *obj,
     *out_pos_buffer_size = n_tris * tri_size;
     *out_norm_buffer = norm_buffer;
     *out_norm_buffer_size = n_tris * tri_size;
+    *out_texcoord_buffer = texcoord_buffer;
+    *out_texcoord_buffer_size = n_tris * tri_size;
 
     return true;
 }

@@ -9,8 +9,12 @@ uniform vec3 mat_diffuse;
 uniform vec3 mat_specular;
 uniform float mat_phongalpha;
 
+uniform sampler2D tex;
+uniform vec3 mulKd;
+
 in vec3 pos_view;
 in vec3 normal_view;
+in vec2 TexCoord;
 
 out vec4 color;
 
@@ -24,5 +28,6 @@ void main() {
     vec3 half_vector = normalize(light_direction + view_direction);
     vec3 specular = mat_specular * pow(max(0, dot(normal_view, half_vector)), mat_phongalpha);
 
-    color = vec4(light_intensity * (diffuse + specular) + ambient_intensity * mat_diffuse, 1);
+    // color = vec4(light_intensity * (diffuse + specular) + ambient_intensity * mat_diffuse, 1);
+    color = /* vec4(mulKd, 1) * */ texture(tex, TexCoord);
 }

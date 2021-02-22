@@ -18,6 +18,7 @@ void mtl_library_init(struct mtl_library *library) {
 void mtl_library_release(struct mtl_library *library) {
     library->n = 0;
     library->c = 0;
+    // TODO: Free materials in v
     if (library->v)
         free(library->v);
     library->v = NULL;
@@ -153,6 +154,8 @@ bool mtl_library_read(struct mtl_library *library, const char *filename) {
 
 static void vflip_sdl_surface(SDL_Surface *surface) {
     void *temp = malloc(surface->pitch);
+    if (temp == NULL)
+        return;
 
     for (int i = 0; i < surface->h; i++) {
         void *row1 = surface->pixels + i * surface->pitch;
@@ -186,7 +189,7 @@ static bool mtl_texture_image_load(struct mtl_texture_image *dest,
     if ((surface = IMG_Load(filename)) == NULL)
         return false;
 
-    SDL_PixelFormatEnum desired_format = SDL_PIXELFORMAT_RGBA8888;
+    SDL_PixelFormatEnum desired_format = SDL_PIXELFORMAT_ABGR8888;
     if (surface->format->format != desired_format) {
         SDL_PixelFormat *dest_format = SDL_AllocFormat(desired_format);
         SDL_Surface *converted = SDL_ConvertSurface(surface, dest_format, 0);
@@ -200,6 +203,8 @@ static bool mtl_texture_image_load(struct mtl_texture_image *dest,
     /* OpenGL places 0,0 at the bottom left; convention for images is top left
      */
     vflip_sdl_surface(surface);
+
+    // TODO: copy surface pixels and free surface
 
     dest->w = surface->w;
     dest->h = surface->h;
