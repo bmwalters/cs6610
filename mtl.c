@@ -99,7 +99,7 @@ static bool mtl_library_read_from_file(struct mtl_library *library,
             // TODO: check scanf return value
         } else if (strncmp(line, "illum ", 6) == 0) {
             assert(has_cur_mtl);
-            sscanf(line, "illum %d", &cur_mtl.illum);
+            sscanf(line, "illum %d", (int *)&cur_mtl.illum);
             // TODO: check scanf return value
         } else if (strncmp(line, "Ns ", 3) == 0) {
             assert(has_cur_mtl);

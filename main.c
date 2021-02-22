@@ -288,7 +288,7 @@ int main(int argc, const char *argv[]) {
     struct obj_obj obj;
     obj_init(&obj);
     if (!obj_read(&obj, obj_filename)) {
-        fprintf(stderr, "Failed to parse obj file");
+        fprintf(stderr, "Failed to parse obj file\n");
         return 1;
     }
 
