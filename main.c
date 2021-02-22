@@ -5,10 +5,8 @@
 #include <stdlib.h>
 #ifdef __APPLE__
 #define GL_SILENCE_DEPRECATION
-#include <OpenGL/glew.h>
-#else
-#include <GL/glew.h>
 #endif
+#include <GL/glew.h>
 #include <SDL.h>
 #include <SDL_video.h>
 
