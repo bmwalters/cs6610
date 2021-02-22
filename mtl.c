@@ -1,0 +1,155 @@
+#include "mtl.h"
+#include "SDL_pixels.h"
+#include "SDL_surface.h"
+#include <SDL_image.h>
+#include <assert.h>
+#include <stdlib.h>
+#include <string.h>
+
+/** mtl parsing */
+
+void mtl_library_init(struct mtl_library *library) {
+    library->n = 0;
+    library->c = 0;
+    library->v = NULL;
+}
+
+void mtl_library_release(struct mtl_library *library) {
+    library->n = 0;
+    library->c = 0;
+    if (library->v)
+        free(library->v);
+    library->v = NULL;
+}
+
+static bool mtl_library_add(struct mtl_library *library, struct mtl_mtl *item) {
+    while (library->n >= library->c) {
+        unsigned int new_c = (library->c == 0) ? 1 : library->c * 2;
+        struct mtl_mtl *new_v = calloc(new_c, sizeof(struct mtl_mtl));
+        if (new_v == NULL)
+            return false;
+
+        library->v =
+            memcpy(new_v, library->v, sizeof(struct mtl_mtl) * library->n);
+        library->c = new_c;
+    }
+
+    library->v[library->n] = *item;
+    library->n++;
+
+    return true;
+}
+
+static bool mtl_texture_image_load(struct mtl_texture_image *dest,
+                                   const char *filename);
+
+bool mtl_library_read(struct mtl_library *library, FILE *file) {
+    const int nline = 1024;
+    char line[nline];
+
+    bool has_cur_mtl = false;
+    struct mtl_mtl cur_mtl;
+
+    while (fgets(line, nline, file) != NULL) {
+        if (strncmp(line, "newmtl ", 7) == 0) {
+            if (has_cur_mtl) {
+                if (!mtl_library_add(library, &cur_mtl))
+                    return false;
+                has_cur_mtl = false;
+            }
+
+            struct mtl_mtl next_mtl = {};
+            cur_mtl = next_mtl;
+            has_cur_mtl = true;
+
+            char name[nline];
+            sscanf(line, "newmtl %s", name);
+            // TODO: check scanf return value
+
+            size_t name_len = strlen(name);
+            char *owned_name = calloc(name_len, 1);
+            if (owned_name == NULL)
+                return false;
+
+            strncpy(owned_name, name, nline);
+            cur_mtl.name = owned_name;
+        } else if (strncmp(line, "Ka ", 3) == 0) {
+            assert(has_cur_mtl);
+            // TODO: support only providing r or r g
+            sscanf(line, "Ka %f %f %f", &cur_mtl.Ka[0], &cur_mtl.Ka[1],
+                   &cur_mtl.Ka[2]);
+            // TODO: check scanf return value
+        } else if (strncmp(line, "Kd ", 3) == 0) {
+            assert(has_cur_mtl);
+            // TODO: support only providing r or r g
+            sscanf(line, "Kd %f %f %f", &cur_mtl.Kd[0], &cur_mtl.Kd[1],
+                   &cur_mtl.Kd[2]);
+            // TODO: check scanf return value
+        } else if (strncmp(line, "Ks ", 3) == 0) {
+            assert(has_cur_mtl);
+            // TODO: support only providing r or r g
+            sscanf(line, "Ks %f %f %f", &cur_mtl.Ks[0], &cur_mtl.Ks[1],
+                   &cur_mtl.Ks[2]);
+            // TODO: check scanf return value
+        } else if (strncmp(line, "illum ", 6) == 0) {
+            assert(has_cur_mtl);
+            sscanf(line, "illum %d", &cur_mtl.illum);
+            // TODO: check scanf return value
+        } else if (strncmp(line, "Ns ", 3) == 0) {
+            assert(has_cur_mtl);
+            sscanf(line, "Ns %f", &cur_mtl.Ns);
+            // TODO: check scanf return value
+        } else if (strncmp(line, "map_Ka ", 7) == 0) {
+            assert(has_cur_mtl);
+            char filename[nline];
+            sscanf(line, "map_Ka %s", filename);
+            // TODO: check scanf return value
+            if (!mtl_texture_image_load(&cur_mtl.map_Ka, filename))
+                return false;
+        } else if (strncmp(line, "map_Kd ", 7) == 0) {
+            assert(has_cur_mtl);
+            char filename[nline];
+            sscanf(line, "map_Kd %s", filename);
+            // TODO: check scanf return value
+            if (!mtl_texture_image_load(&cur_mtl.map_Kd, filename))
+                return false;
+        } else if (strncmp(line, "map_Ks ", 7) == 0) {
+            assert(has_cur_mtl);
+            char filename[nline];
+            sscanf(line, "map_Ks %s", filename);
+            // TODO: check scanf return value
+            if (!mtl_texture_image_load(&cur_mtl.map_Ks, filename))
+                return false;
+        }
+    }
+
+    if (has_cur_mtl)
+        if (!mtl_library_add(library, &cur_mtl))
+            return false;
+
+    return true;
+}
+
+static bool mtl_texture_image_load(struct mtl_texture_image *dest,
+                                   const char *filename) {
+    SDL_Surface *surface;
+    if ((surface = IMG_Load(filename)) == NULL)
+        return false;
+
+    SDL_PixelFormatEnum desired_format = SDL_PIXELFORMAT_RGBA8888;
+    if (surface->format->format != desired_format) {
+        SDL_PixelFormat *dest_format = SDL_AllocFormat(desired_format);
+        SDL_Surface *converted = SDL_ConvertSurface(surface, dest_format, 0);
+        SDL_FreeFormat(dest_format);
+        SDL_FreeSurface(surface);
+        if (converted == NULL)
+            return false;
+        surface = converted;
+    }
+
+    dest->w = surface->w;
+    dest->h = surface->h;
+    dest->v = surface->pixels;
+
+    return true;
+}

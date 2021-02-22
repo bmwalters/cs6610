@@ -80,6 +80,7 @@ static bool obj_triface_vector_add(struct obj_triface_vector *vec,
 
 void obj_init(struct obj_obj *obj) {
     obj_vertex_vector_init(&obj->v);
+    obj_vertex_vector_init(&obj->t);
     obj_vertex_vector_init(&obj->n);
     obj_triface_vector_init(&obj->vf);
     obj_triface_vector_init(&obj->tf);
@@ -88,6 +89,7 @@ void obj_init(struct obj_obj *obj) {
 
 void obj_release(struct obj_obj *obj) {
     obj_vertex_vector_release(&obj->v);
+    obj_vertex_vector_release(&obj->t);
     obj_vertex_vector_release(&obj->n);
     obj_triface_vector_release(&obj->vf);
     obj_triface_vector_release(&obj->tf);
@@ -117,9 +119,21 @@ bool obj_read(struct obj_obj *obj, FILE *file) {
 
             if (!obj_vertex_vector_add(&obj->n, &normal))
                 return false;
+        } else if (line[0] == 'v' && line[1] == 't' && line[2] == ' ') {
+            struct obj_vertex vertex;
+            if (sscanf(line, "vt %f %f %f", &vertex.x, &vertex.y, &vertex.z) ==
+                EOF)
+                return false;
+
+            if (!obj_vertex_vector_add(&obj->t, &vertex))
+                return false;
         } else if (line[0] == 'f' && line[1] == ' ') {
             if (!parse_face_line(obj, line))
                 return false;
+        } else if (strncmp(line, "mtllib ", 7) == 0) {
+            // TODO
+        } else if (strncmp(line, "usemtl ", 7) == 0) {
+            // TODO
         }
     }
 
