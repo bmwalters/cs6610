@@ -285,26 +285,24 @@ int main(int argc, const char *argv[]) {
     }
 
     const char *obj_filename = argv[1];
-    FILE *obj_file = fopen(obj_filename, "r");
-    if (obj_file == NULL) {
-        perror("Unable to open obj file");
-        return 1;
-    }
-
     struct obj_obj obj;
     obj_init(&obj);
-    if (!obj_read(&obj, obj_file)) {
+    if (!obj_read(&obj, obj_filename)) {
         fprintf(stderr, "Failed to parse obj file");
         return 1;
     }
-    fclose(obj_file);
 
     if (VERBOSE)
         printf("Loaded '%s'.\n\t%zu geometric vertices\n\t%zu texture "
                "vertices\n\t%zu vertex normals\n\t%zu faces\n\t%zu normal "
-               "faces\n\t%zu texture faces\n",
+               "faces\n\t%zu texture faces\n\t%zu materials\n\t%zu vertices "
+               "with materials\n",
                obj_filename, obj.v.n, obj.t.n, obj.n.n, obj.vf.n, obj.nf.n,
-               obj.tf.n);
+               obj.tf.n, obj.m.n, obj.fm.n);
+
+    if (VERBOSE && obj.m.n > 0)
+        printf("Material 0:\n\tKa %f %f %f\n", obj.m.v[0].Ka[0],
+               obj.m.v[0].Ka[1], obj.m.v[0].Ka[2]);
 
     SDL_Init(SDL_INIT_VIDEO);
 

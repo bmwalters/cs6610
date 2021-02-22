@@ -2,6 +2,7 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include "mtl.h"
 
 struct obj_vertex {
     float x;
@@ -23,12 +24,6 @@ struct obj_triface_vector {
     size_t n;
     size_t c;
     struct obj_triface *v;
-};
-
-struct obj_mtl_vector {
-    size_t n;
-    size_t c;
-    struct obj_mtl *v;
 };
 
 struct obj_size_t_vector {
@@ -57,7 +52,7 @@ struct obj_obj {
     struct obj_triface_vector nf;
 
     /* materials */
-    struct obj_mtl_vector m;
+    struct mtl_library m;
 
     /* face index -> material index */
     struct obj_size_t_vector fm;
@@ -67,4 +62,4 @@ void obj_init(struct obj_obj *obj);
 
 void obj_release(struct obj_obj *obj);
 
-bool obj_read(struct obj_obj *obj, FILE *file);
+bool obj_read(struct obj_obj *obj, const char *filename);

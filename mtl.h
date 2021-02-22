@@ -57,5 +57,5 @@ void mtl_library_init(struct mtl_library *library);
 /** must be called before deallocating an `mtl_library` */
 void mtl_library_release(struct mtl_library *library);
 
-/** appends material definitions from `file` into `library` until EOF */
-bool mtl_library_read(struct mtl_library *library, FILE *file);
+/** appends material definitions from file `filename` into `library` until EOF */
+bool mtl_library_read(struct mtl_library *library, const char *filename);

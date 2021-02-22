@@ -3,6 +3,7 @@
 #include "SDL_surface.h"
 #include <SDL_image.h>
 #include <assert.h>
+#include <libgen.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -41,16 +42,21 @@ static bool mtl_library_add(struct mtl_library *library, struct mtl_mtl *item) {
 }
 
 static bool mtl_texture_image_load(struct mtl_texture_image *dest,
-                                   const char *filename);
+                                   const char *mtl_filename,
+                                   const char *img_filename);
 
-bool mtl_library_read(struct mtl_library *library, FILE *file) {
+static bool mtl_library_read_from_file(struct mtl_library *library,
+                                       const char *filename, FILE *file) {
     const int nline = 1024;
-    char line[nline];
+    char curline[nline];
 
     bool has_cur_mtl = false;
     struct mtl_mtl cur_mtl;
 
-    while (fgets(line, nline, file) != NULL) {
+    while (fgets(curline, nline, file) != NULL) {
+        char *line = curline;
+        while (*line == ' ' || *line == '\t')
+            line++;
         if (strncmp(line, "newmtl ", 7) == 0) {
             if (has_cur_mtl) {
                 if (!mtl_library_add(library, &cur_mtl))
@@ -66,12 +72,12 @@ bool mtl_library_read(struct mtl_library *library, FILE *file) {
             sscanf(line, "newmtl %s", name);
             // TODO: check scanf return value
 
-            size_t name_len = strlen(name);
+            size_t name_len = strlen(name) + 1;
             char *owned_name = calloc(name_len, 1);
             if (owned_name == NULL)
                 return false;
 
-            strncpy(owned_name, name, nline);
+            strncpy(owned_name, name, name_len);
             cur_mtl.name = owned_name;
         } else if (strncmp(line, "Ka ", 3) == 0) {
             assert(has_cur_mtl);
@@ -101,24 +107,27 @@ bool mtl_library_read(struct mtl_library *library, FILE *file) {
             // TODO: check scanf return value
         } else if (strncmp(line, "map_Ka ", 7) == 0) {
             assert(has_cur_mtl);
-            char filename[nline];
-            sscanf(line, "map_Ka %s", filename);
+            char img_filename[nline];
+            sscanf(line, "map_Ka %s", img_filename);
             // TODO: check scanf return value
-            if (!mtl_texture_image_load(&cur_mtl.map_Ka, filename))
+            if (!mtl_texture_image_load(&cur_mtl.map_Ka, filename,
+                                        img_filename))
                 return false;
         } else if (strncmp(line, "map_Kd ", 7) == 0) {
             assert(has_cur_mtl);
-            char filename[nline];
-            sscanf(line, "map_Kd %s", filename);
+            char img_filename[nline];
+            sscanf(line, "map_Kd %s", img_filename);
             // TODO: check scanf return value
-            if (!mtl_texture_image_load(&cur_mtl.map_Kd, filename))
+            if (!mtl_texture_image_load(&cur_mtl.map_Kd, filename,
+                                        img_filename))
                 return false;
         } else if (strncmp(line, "map_Ks ", 7) == 0) {
             assert(has_cur_mtl);
-            char filename[nline];
-            sscanf(line, "map_Ks %s", filename);
+            char img_filename[nline];
+            sscanf(line, "map_Ks %s", img_filename);
             // TODO: check scanf return value
-            if (!mtl_texture_image_load(&cur_mtl.map_Ks, filename))
+            if (!mtl_texture_image_load(&cur_mtl.map_Ks, filename,
+                                        img_filename))
                 return false;
         }
     }
@@ -130,8 +139,49 @@ bool mtl_library_read(struct mtl_library *library, FILE *file) {
     return true;
 }
 
+bool mtl_library_read(struct mtl_library *library, const char *filename) {
+    FILE *file = fopen(filename, "r");
+    if (file == NULL)
+        return false;
+
+    bool result = mtl_library_read_from_file(library, filename, file);
+    fclose(file);
+    return result;
+}
+
+/** image loading */
+
+static void vflip_sdl_surface(SDL_Surface *surface) {
+    void *temp = malloc(surface->pitch);
+
+    for (int i = 0; i < surface->h; i++) {
+        void *row1 = surface->pixels + i * surface->pitch;
+        void *row2 = surface->pixels + (surface->h - i - 1) * surface->pitch;
+        memcpy(temp, row1, surface->pitch);
+        memcpy(row1, row2, surface->pitch);
+        memcpy(row2, temp, surface->pitch);
+    }
+
+    free(temp);
+}
+
 static bool mtl_texture_image_load(struct mtl_texture_image *dest,
-                                   const char *filename) {
+                                   const char *mtl_filename,
+                                   const char *img_filename) {
+    char filename_len = strlen(mtl_filename) + strlen(img_filename) + 1;
+    char *filename = calloc(filename_len, 1);
+
+    /* read the directory of the mtl file into filename */
+    strncpy(filename, mtl_filename, filename_len);
+    char *mtl_directory = dirname(filename);
+    strncpy(filename, mtl_directory, filename_len);
+    size_t mtl_directory_len = strlen(mtl_directory);
+
+    /* concatenate /<img_filename_relative> to the directory */
+    assert(mtl_directory_len < (filename_len - 1));
+    strcat(filename, "/");
+    strncat(filename, img_filename, filename_len - mtl_directory_len - 1);
+
     SDL_Surface *surface;
     if ((surface = IMG_Load(filename)) == NULL)
         return false;
@@ -146,6 +196,10 @@ static bool mtl_texture_image_load(struct mtl_texture_image *dest,
             return false;
         surface = converted;
     }
+
+    /* OpenGL places 0,0 at the bottom left; convention for images is top left
+     */
+    vflip_sdl_surface(surface);
 
     dest->w = surface->w;
     dest->h = surface->h;
