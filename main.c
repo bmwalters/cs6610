@@ -403,12 +403,13 @@ int main(int argc, const char *argv[]) {
     glBindTexture(GL_TEXTURE_2D, texture_Ka);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // TODO
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+                    GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, obj.m.v[0].map_Ka.w,
                  obj.m.v[0].map_Ka.h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
                  obj.m.v[0].map_Ka.v);
-    // glGenerateMipmap(GL_TEXTURE_2D); TODO
+    glGenerateMipmap(GL_TEXTURE_2D);
 
     GLuint texture_Kd;
     glGenTextures(1, &texture_Kd);
@@ -416,12 +417,13 @@ int main(int argc, const char *argv[]) {
     glBindTexture(GL_TEXTURE_2D, texture_Kd);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // TODO
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+                    GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, obj.m.v[0].map_Kd.w,
                  obj.m.v[0].map_Kd.h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
                  obj.m.v[0].map_Kd.v);
-    // glGenerateMipmap(GL_TEXTURE_2D); TODO
+    glGenerateMipmap(GL_TEXTURE_2D);
 
     GLuint texture_Ks;
     glGenTextures(1, &texture_Ks);
@@ -429,12 +431,13 @@ int main(int argc, const char *argv[]) {
     glBindTexture(GL_TEXTURE_2D, texture_Ks);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // TODO
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
+                    GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, obj.m.v[0].map_Ks.w,
                  obj.m.v[0].map_Ks.h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
                  obj.m.v[0].map_Ks.v);
-    // glGenerateMipmap(GL_TEXTURE_2D); TODO
+    glGenerateMipmap(GL_TEXTURE_2D);
 
     GLuint vbo_texcoord;
     glGenBuffers(1, &vbo_texcoord);
