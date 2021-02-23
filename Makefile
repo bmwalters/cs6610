@@ -1,4 +1,5 @@
 CFLAGS = -Wall -Wextra -Wpedantic -Werror -Wno-unused-function \
+	-Wno-nullability-extension -Wno-nullability-completeness -Wno-expansion-to-defined -Wno-newline-eof \
 	-g -fsanitize=undefined,address
 
 FLAGS_GL = -lGL -lGLU
