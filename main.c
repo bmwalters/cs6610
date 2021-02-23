@@ -241,7 +241,7 @@ static void bounding_box(const struct obj_obj *obj, struct obj_vertex *outmin,
         return;
     struct obj_vertex min = obj->v.v[0];
     struct obj_vertex max = obj->v.v[0];
-    for (int i = 1; i < obj->v.n; i++) {
+    for (size_t i = 1; i < obj->v.n; i++) {
         struct obj_vertex vertex = obj->v.v[i];
         if (vertex.x < min.x)
             min.x = vertex.x;

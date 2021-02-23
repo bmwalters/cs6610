@@ -48,7 +48,7 @@ static bool mtl_texture_image_load(struct mtl_texture_image *dest,
 
 static bool mtl_library_read_from_file(struct mtl_library *library,
                                        const char *filename, FILE *file) {
-    const int nline = 1024;
+    enum { nline = 1024 };
     char curline[nline];
 
     bool has_cur_mtl = false;
@@ -65,7 +65,7 @@ static bool mtl_library_read_from_file(struct mtl_library *library,
                 has_cur_mtl = false;
             }
 
-            struct mtl_mtl next_mtl = {};
+            struct mtl_mtl next_mtl = {0};
             cur_mtl = next_mtl;
             has_cur_mtl = true;
 
@@ -158,8 +158,9 @@ static void vflip_sdl_surface(SDL_Surface *surface) {
         return;
 
     for (int i = 0; i < surface->h; i++) {
-        void *row1 = surface->pixels + i * surface->pitch;
-        void *row2 = surface->pixels + (surface->h - i - 1) * surface->pitch;
+        void *row1 = (char *)surface->pixels + i * surface->pitch;
+        void *row2 =
+            (char *)surface->pixels + (surface->h - i - 1) * surface->pitch;
         memcpy(temp, row1, surface->pitch);
         memcpy(row1, row2, surface->pitch);
         memcpy(row2, temp, surface->pitch);
@@ -171,7 +172,7 @@ static void vflip_sdl_surface(SDL_Surface *surface) {
 static bool mtl_texture_image_load(struct mtl_texture_image *dest,
                                    const char *mtl_filename,
                                    const char *img_filename) {
-    char filename_len = strlen(mtl_filename) + strlen(img_filename) + 1;
+    size_t filename_len = strlen(mtl_filename) + strlen(img_filename) + 1;
     char *filename = calloc(filename_len, 1);
 
     /* read the directory of the mtl file into filename */

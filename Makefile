@@ -1,8 +1,8 @@
-CFLAGS = -g -Wall -Werror -Wno-unused-function
-FLAGS_GL = -lGL -lGLU
+CFLAGS = -Wall -Wextra -Wpedantic -Werror -Wno-unused-function \
+	-g -fsanitize=undefined,address
 
+FLAGS_GL = -lGL -lGLU
 ifeq "$(shell uname)" "Darwin"
-	CFLAGS += -fsanitize=address
 	FLAGS_GL = -framework OpenGL
 endif
 

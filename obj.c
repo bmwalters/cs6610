@@ -140,7 +140,7 @@ static bool parse_face_line(struct obj_obj *obj, const char *line,
 
 static bool obj_read_from_file(struct obj_obj *obj, const char *filename,
                                FILE *file) {
-    const int nline = 1024;
+    enum { nline = 1024 };
     char line[nline];
 
     bool has_cur_mtl = false;
