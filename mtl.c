@@ -7,7 +7,15 @@
 #include <stdlib.h>
 #include <string.h>
 
-/** mtl parsing */
+/* mtl_texture_image */
+
+static bool mtl_texture_image_load(struct mtl_texture_image *dest,
+                                   const char *mtl_filename,
+                                   const char *img_filename);
+
+static void mtl_texture_image_release(struct mtl_texture_image *image);
+
+/* mtl_library vector functions */
 
 void mtl_library_init(struct mtl_library *library) {
     library->n = 0;
@@ -15,11 +23,22 @@ void mtl_library_init(struct mtl_library *library) {
     library->v = NULL;
 }
 
+static void mtl_release(struct mtl_mtl *mtl) {
+    free((char *)mtl->name);
+    if (mtl->map_Ka.v != NULL)
+        mtl_texture_image_release(&mtl->map_Ka);
+    if (mtl->map_Kd.v != NULL)
+        mtl_texture_image_release(&mtl->map_Kd);
+    if (mtl->map_Ks.v != NULL)
+        mtl_texture_image_release(&mtl->map_Ks);
+}
+
 void mtl_library_release(struct mtl_library *library) {
+    for (size_t i = 0; i < library->n; i++)
+        mtl_release(&library->v[i]);
     library->n = 0;
     library->c = 0;
-    // TODO: Free materials in v
-    if (library->v)
+    if (library->v != NULL)
         free(library->v);
     library->v = NULL;
 }
@@ -42,9 +61,7 @@ static bool mtl_library_add(struct mtl_library *library, struct mtl_mtl *item) {
     return true;
 }
 
-static bool mtl_texture_image_load(struct mtl_texture_image *dest,
-                                   const char *mtl_filename,
-                                   const char *img_filename);
+/* mtl parsing */
 
 static bool mtl_library_read_from_file(struct mtl_library *library,
                                        const char *filename, FILE *file) {
@@ -150,7 +167,7 @@ bool mtl_library_read(struct mtl_library *library, const char *filename) {
     return result;
 }
 
-/** image loading */
+/* mtl_texture_image loading */
 
 static void vflip_sdl_surface(SDL_Surface *surface) {
     void *temp = malloc(surface->pitch);
@@ -205,11 +222,26 @@ static bool mtl_texture_image_load(struct mtl_texture_image *dest,
      */
     vflip_sdl_surface(surface);
 
-    // TODO: copy surface pixels and free surface
-
     dest->w = surface->w;
     dest->h = surface->h;
-    dest->v = surface->pixels;
+
+    void *pixel_data = calloc(surface->h, surface->pitch);
+    if (pixel_data == NULL) {
+        SDL_FreeSurface(surface);
+        return false;
+    }
+
+    memcpy(pixel_data, surface->pixels, surface->h * surface->pitch);
+    SDL_FreeSurface(surface);
+
+    dest->v = pixel_data;
 
     return true;
+}
+
+static void mtl_texture_image_release(struct mtl_texture_image *image) {
+    image->w = 0;
+    image->h = 0;
+    free(image->v);
+    image->v = NULL;
 }
