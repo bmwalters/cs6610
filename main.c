@@ -397,10 +397,23 @@ int main(int argc, const char *argv[]) {
     glEnableVertexAttribArray(pos);
     glVertexAttribPointer(pos, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
-    GLuint texture;
-    glGenTextures(1, &texture);
+    GLuint texture_Ka;
+    glGenTextures(1, &texture_Ka);
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, texture);
+    glBindTexture(GL_TEXTURE_2D, texture_Ka);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // TODO
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, obj.m.v[0].map_Ka.w,
+                 obj.m.v[0].map_Ka.h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                 obj.m.v[0].map_Ka.v);
+    // glGenerateMipmap(GL_TEXTURE_2D); TODO
+
+    GLuint texture_Kd;
+    glGenTextures(1, &texture_Kd);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, texture_Kd);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // TODO
@@ -408,6 +421,19 @@ int main(int argc, const char *argv[]) {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, obj.m.v[0].map_Kd.w,
                  obj.m.v[0].map_Kd.h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
                  obj.m.v[0].map_Kd.v);
+    // glGenerateMipmap(GL_TEXTURE_2D); TODO
+
+    GLuint texture_Ks;
+    glGenTextures(1, &texture_Ks);
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, texture_Ks);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // TODO
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, obj.m.v[0].map_Ks.w,
+                 obj.m.v[0].map_Ks.h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                 obj.m.v[0].map_Ks.v);
     // glGenerateMipmap(GL_TEXTURE_2D); TODO
 
     GLuint vbo_texcoord;
@@ -423,13 +449,15 @@ int main(int argc, const char *argv[]) {
     glUseProgram(program);
 
     // TODO: make sure this changes after shader recomp
-    glUniform1i(glGetUniformLocation(program, "tex"), 0);
+    glUniform1i(glGetUniformLocation(program, "map_Ka"), 0);
+    glUniform1i(glGetUniformLocation(program, "map_Kd"), 1);
+    glUniform1i(glGetUniformLocation(program, "map_Ks"), 2);
 
-    // printf("%f %f %f\n", obj.m.v[0].Kd[0], obj.m.v[0].Kd[1],
-    // obj.m.v[0].Kd[2]);
-    printf("%d %d %d %d\n", obj.m.v[0].map_Kd.v[0], obj.m.v[0].map_Kd.v[1],
-           obj.m.v[0].map_Kd.v[2], obj.m.v[0].map_Kd.v[3]);
-    glUniform3fv(glGetUniformLocation(program, "mulKd"), 1, &obj.m.v[0].Kd[0]);
+    glUniform3fv(glGetUniformLocation(program, "Ka"), 1, &obj.m.v[0].Ka[0]);
+    glUniform3fv(glGetUniformLocation(program, "Kd"), 1, &obj.m.v[0].Kd[0]);
+    glUniform3fv(glGetUniformLocation(program, "Ks"), 1, &obj.m.v[0].Ks[0]);
+
+    glUniform1f(glGetUniformLocation(program, "Ns"), obj.m.v[0].Ns);
 
     struct obj_vertex obj_min, obj_max;
     bounding_box(&obj, &obj_min, &obj_max);
@@ -577,10 +605,6 @@ int main(int argc, const char *argv[]) {
         glUniform3fv(glGetUniformLocation(program, "light_pos_view"), 1,
                      &light_pos_view[0]);
         glUniform1f(glGetUniformLocation(program, "light_intensity"), 0.8);
-
-        glUniform3f(glGetUniformLocation(program, "mat_diffuse"), 1, 0, 0);
-        glUniform3f(glGetUniformLocation(program, "mat_specular"), 1, 1, 1);
-        glUniform1f(glGetUniformLocation(program, "mat_phongalpha"), 100);
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
