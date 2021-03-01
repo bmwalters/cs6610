@@ -50,8 +50,10 @@ static bool mtl_library_add(struct mtl_library *library, struct mtl_mtl *item) {
         if (new_v == NULL)
             return false;
 
-        library->v =
+        if (library->v != NULL)
             memcpy(new_v, library->v, sizeof(struct mtl_mtl) * library->n);
+
+        library->v = new_v;
         library->c = new_c;
     }
 
@@ -195,8 +197,9 @@ static bool mtl_texture_image_load(struct mtl_texture_image *dest,
     /* read the directory of the mtl file into filename */
     strncpy(filename, mtl_filename, filename_len);
     char *mtl_directory = dirname(filename);
-    strncpy(filename, mtl_directory, filename_len);
     size_t mtl_directory_len = strlen(mtl_directory);
+    assert(mtl_directory_len < filename_len);
+    memmove(filename, mtl_directory, mtl_directory_len + 1);
 
     /* concatenate /<img_filename_relative> to the directory */
     assert(mtl_directory_len < (filename_len - 1));

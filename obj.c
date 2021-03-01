@@ -30,7 +30,10 @@ static bool obj_vertex_vector_add(struct obj_vertex_vector *vec,
         if (new_v == NULL)
             return false;
 
-        vec->v = memcpy(new_v, vec->v, sizeof(struct obj_vertex) * vec->n);
+        if (vec->v != NULL)
+            memcpy(new_v, vec->v, sizeof(struct obj_vertex) * vec->n);
+
+        vec->v = new_v;
         vec->c = new_c;
     }
 
@@ -65,7 +68,10 @@ static bool obj_triface_vector_add(struct obj_triface_vector *vec,
         if (new_v == NULL)
             return false;
 
-        vec->v = memcpy(new_v, vec->v, sizeof(struct obj_triface) * vec->n);
+        if (vec->v != NULL)
+            memcpy(new_v, vec->v, sizeof(struct obj_triface) * vec->n);
+
+        vec->v = new_v;
         vec->c = new_c;
     }
 
@@ -95,11 +101,14 @@ static void obj_size_t_vector_release(struct obj_size_t_vector *vec) {
 static bool obj_size_t_vector_add(struct obj_size_t_vector *vec, size_t item) {
     while (vec->n >= vec->c) {
         unsigned int new_c = (vec->c == 0) ? 1 : vec->c * 2;
-        struct obj_size_t *new_v = calloc(new_c, sizeof(size_t));
+        size_t *new_v = calloc(new_c, sizeof(size_t));
         if (new_v == NULL)
             return false;
 
-        vec->v = memcpy(new_v, vec->v, sizeof(size_t) * vec->n);
+        if (vec->v != NULL)
+            memcpy(new_v, vec->v, sizeof(size_t) * vec->n);
+
+        vec->v = new_v;
         vec->c = new_c;
     }
 
@@ -184,8 +193,9 @@ static bool obj_read_from_file(struct obj_obj *obj, const char *filename,
             char mtl_filename[nline];
             strncpy(mtl_filename, filename, nline);
             char *obj_directory = dirname(mtl_filename);
-            strncpy(mtl_filename, obj_directory, nline);
             size_t obj_directory_len = strlen(obj_directory);
+            assert(obj_directory_len < nline);
+            memmove(mtl_filename, obj_directory, obj_directory_len + 1);
 
             /* concatenate /<mtl_filename_relative> to the directory */
             assert(obj_directory_len < (nline - 1));
