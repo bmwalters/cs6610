@@ -13,9 +13,8 @@ naive_make_triangle_buffer(const struct obj_obj *obj, size_t *out_tri_count,
                            size_t *out_texcoord_buffer_size);
 
 bool object_init_vao(struct object_object *object, GLuint program) {
-    GLuint vao;
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
+    glGenVertexArrays(1, &object->vao);
+    glBindVertexArray(object->vao);
 
     /*
     GLuint ebuffer;
@@ -32,9 +31,8 @@ bool object_init_vao(struct object_object *object, GLuint program) {
             &object->buffer_texcoord_size))
         return false;
 
-    GLuint vbo_norm;
-    glGenBuffers(1, &vbo_norm);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_norm);
+    glGenBuffers(1, &object->vbo_norm);
+    glBindBuffer(GL_ARRAY_BUFFER, object->vbo_norm);
     glBufferData(GL_ARRAY_BUFFER, object->buffer_norm_size, object->buffer_norm,
                  GL_STATIC_DRAW);
 
@@ -42,9 +40,8 @@ bool object_init_vao(struct object_object *object, GLuint program) {
     glEnableVertexAttribArray(normal);
     glVertexAttribPointer(normal, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
-    GLuint vbo_pos;
-    glGenBuffers(1, &vbo_pos);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_pos);
+    glGenBuffers(1, &object->vbo_pos);
+    glBindBuffer(GL_ARRAY_BUFFER, object->vbo_pos);
     glBufferData(GL_ARRAY_BUFFER, object->buffer_pos_size, object->buffer_pos,
                  GL_STATIC_DRAW);
 
@@ -52,9 +49,8 @@ bool object_init_vao(struct object_object *object, GLuint program) {
     glEnableVertexAttribArray(pos);
     glVertexAttribPointer(pos, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
-    GLuint vbo_texcoord;
-    glGenBuffers(1, &vbo_texcoord);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_texcoord);
+    glGenBuffers(1, &object->vbo_texcoord);
+    glBindBuffer(GL_ARRAY_BUFFER, object->vbo_texcoord);
     glBufferData(GL_ARRAY_BUFFER, object->buffer_texcoord_size,
                  object->buffer_texcoord, GL_STATIC_DRAW);
 
@@ -64,10 +60,8 @@ bool object_init_vao(struct object_object *object, GLuint program) {
 
     struct mtl_mtl *used_mtl = &object->obj.m.v[0];
 
-    GLuint texture_Ka;
-    glGenTextures(1, &texture_Ka);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, texture_Ka);
+    glGenTextures(1, &object->texture_Ka);
+    glBindTexture(GL_TEXTURE_2D, object->texture_Ka);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
@@ -78,10 +72,8 @@ bool object_init_vao(struct object_object *object, GLuint program) {
                  used_mtl->map_Ka.v);
     glGenerateMipmap(GL_TEXTURE_2D);
 
-    GLuint texture_Kd;
-    glGenTextures(1, &texture_Kd);
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, texture_Kd);
+    glGenTextures(1, &object->texture_Kd);
+    glBindTexture(GL_TEXTURE_2D, object->texture_Kd);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
@@ -92,10 +84,8 @@ bool object_init_vao(struct object_object *object, GLuint program) {
                  used_mtl->map_Kd.v);
     glGenerateMipmap(GL_TEXTURE_2D);
 
-    GLuint texture_Ks;
-    glGenTextures(1, &texture_Ks);
-    glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_2D, texture_Ks);
+    glGenTextures(1, &object->texture_Ks);
+    glBindTexture(GL_TEXTURE_2D, object->texture_Ks);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
@@ -114,20 +104,38 @@ void object_release(struct object_object *object) {
     free(object->buffer_norm);
     free(object->buffer_pos);
     free(object->buffer_texcoord);
-    // TODO: Free VAO, textures, VBOs?
+    glDeleteTextures(1, &object->texture_Ka);
+    glDeleteTextures(1, &object->texture_Kd);
+    glDeleteTextures(1, &object->texture_Ks);
+    glDeleteBuffers(1, &object->vbo_norm);
+    glDeleteBuffers(1, &object->vbo_pos);
+    glDeleteBuffers(1, &object->vbo_texcoord);
+    glDeleteVertexArrays(1, &object->vao);
 }
 
 void object_render(const struct object_object *object, GLuint program,
                    const mat4 *projection, const mat4 *view) {
     const struct obj_obj *obj = &object->obj;
 
-    // TODO: Bind textures to units so 0,1,2 == texture_Ka,Kd,Ks
+    /* bind vao */
+    glBindVertexArray(object->vao);
 
-    // TODO: make sure this changes after shader recomp
+    /* bind textures */
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, object->texture_Ka);
+
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, object->texture_Kd);
+
+    glActiveTexture(GL_TEXTURE2);
+    glBindTexture(GL_TEXTURE_2D, object->texture_Ks);
+
+    /* set texture uniforms */
     glUniform1i(glGetUniformLocation(program, "map_Ka"), 0);
     glUniform1i(glGetUniformLocation(program, "map_Kd"), 1);
     glUniform1i(glGetUniformLocation(program, "map_Ks"), 2);
 
+    /* set other material uniforms */
     glUniform3fv(glGetUniformLocation(program, "Ka"), 1, &obj->m.v[0].Ka[0]);
     glUniform3fv(glGetUniformLocation(program, "Kd"), 1, &obj->m.v[0].Kd[0]);
     glUniform3fv(glGetUniformLocation(program, "Ks"), 1, &obj->m.v[0].Ks[0]);
@@ -166,8 +174,6 @@ void object_render(const struct object_object *object, GLuint program,
     matinversetranspose(&mv_normals, &mv3);
     glUniformMatrix3fv(glGetUniformLocation(program, "mv_normals"), 1, GL_FALSE,
                        &mv_normals.m[0][0]);
-
-    // TODO: Bind textures, vao, vbo
 
     glDrawArrays(GL_TRIANGLES, 0, object->triangle_count * 3);
     // glDrawElements(GL_TRIANGLES, obj.vf.n * 3, GL_UNSIGNED_INT, 0);

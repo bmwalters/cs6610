@@ -96,6 +96,42 @@ int main(int argc, const char *argv[]) {
     if (VERBOSE)
         printf("GLEW_VERSION: %s\n", glewGetString(GLEW_VERSION));
 
+    /* create frame buffer */
+    GLuint framebuffer;
+    glGenFramebuffers(1, &framebuffer);
+    glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+
+    /* create texture */
+    const unsigned int texw = 512;
+    const unsigned int texh = 512;
+    GLuint rendered_texture;
+    glGenTextures(1, &rendered_texture);
+    glBindTexture(GL_TEXTURE_2D, rendered_texture);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texw, texh, 0, GL_RGB,
+                 GL_UNSIGNED_BYTE, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+
+    /* create depth buffer */
+    GLuint depth_buffer;
+    glGenRenderbuffers(1, &depth_buffer);
+    glBindRenderbuffer(GL_RENDERBUFFER, depth_buffer);
+    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH_COMPONENT, texw, texh);
+
+    /* configure frame buffer */
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT,
+                              GL_RENDERBUFFER, depth_buffer);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D,
+                           rendered_texture, 0);
+    GLenum draw_buffers[1] = {GL_COLOR_ATTACHMENT0};
+    glDrawBuffers(1, draw_buffers);
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+        fprintf(stderr, "framebuffer status != complete\n");
+        return 1;
+    }
+
     GLuint program = glCreateProgram();
     compile_shader_program(program);
 
@@ -106,8 +142,57 @@ int main(int argc, const char *argv[]) {
         return 1;
     }
 
-    // TODO: call this after recompilation?
-    glUseProgram(program);
+    float texturedquad_buffer_pos[18] = {-1, -1, 0, -1, 1, 0, 1,  -1, 0,
+                                         1,  -1, 0, 1,  1, 0, -1, 1,  0};
+    float texturedquad_buffer_norm[18] = {0, 0, 1, 0, 0, 1, 0, 0, 1,
+                                          0, 0, 1, 0, 0, 1, 0, 0, 1};
+    float texturedquad_buffer_texcoord[18] = {0, 0, 0, 0, 1, 0, 1, 0, 0,
+                                              1, 0, 0, 1, 1, 1, 0, 1, 0};
+
+    GLuint texturedquad_vao;
+    glGenVertexArrays(1, &texturedquad_vao);
+    glBindVertexArray(texturedquad_vao);
+
+    GLuint texturedquad_vbo_norm;
+    glGenBuffers(1, &texturedquad_vbo_norm);
+    glBindBuffer(GL_ARRAY_BUFFER, texturedquad_vbo_norm);
+    glBufferData(GL_ARRAY_BUFFER, 18 * sizeof(float), texturedquad_buffer_norm,
+                 GL_STATIC_DRAW);
+
+    GLuint normal_loc = glGetAttribLocation(program, "normal");
+    glEnableVertexAttribArray(normal_loc);
+    glVertexAttribPointer(normal_loc, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+    GLuint texturedquad_vbo_pos;
+    glGenBuffers(1, &texturedquad_vbo_pos);
+    glBindBuffer(GL_ARRAY_BUFFER, texturedquad_vbo_pos);
+    glBufferData(GL_ARRAY_BUFFER, 18 * sizeof(float), texturedquad_buffer_pos,
+                 GL_STATIC_DRAW);
+
+    GLuint pos_loc = glGetAttribLocation(program, "pos");
+    glEnableVertexAttribArray(pos_loc);
+    glVertexAttribPointer(pos_loc, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+    GLuint texturedquad_vbo_texcoord;
+    glGenBuffers(1, &texturedquad_vbo_texcoord);
+    glBindBuffer(GL_ARRAY_BUFFER, texturedquad_vbo_texcoord);
+    glBufferData(GL_ARRAY_BUFFER, 18 * sizeof(float),
+                 texturedquad_buffer_texcoord, GL_STATIC_DRAW);
+
+    GLuint texcoord_loc = glGetAttribLocation(program, "texcoord");
+    glEnableVertexAttribArray(texcoord_loc);
+    glVertexAttribPointer(texcoord_loc, 3, GL_FLOAT, GL_FALSE, 0, 0);
+
+    GLuint texture_white;
+    glGenTextures(1, &texture_white);
+    glBindTexture(GL_TEXTURE_2D, texture_white);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    unsigned char texture_data_white[4] = {255, 255, 255, 255};
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE,
+                 &texture_data_white[0]);
 
     struct obj_vertex obj_min, obj_max;
     obj_bounding_box(obj, &obj_min, &obj_max);
@@ -187,6 +272,9 @@ int main(int argc, const char *argv[]) {
             }
         }
 
+        // TODO: don't call this every frame?
+        glUseProgram(program);
+
         // view -> clip space transformation
         // "projection matrix"
         mat4 projection;
@@ -224,12 +312,93 @@ int main(int argc, const char *argv[]) {
         teapot.tz = obj_center_zoff;
         teapot.scale = obj_fill_scale;
 
+        /**
+         * Render the teapot
+         */
+
+        glBindFramebuffer(GL_FRAMEBUFFER, framebuffer);
+        glEnable(GL_DEPTH_TEST);
+        glViewport(0, 0, texw, texh);
+        glClearColor(0, 0, 0, 1);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        object_render(&teapot, program, &projection, &view);
+
+        /**
+         * Render the textured quad
+         */
+
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
         glEnable(GL_DEPTH_TEST);
         glViewport(0, 0, W, H);
         glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        object_render(&teapot, program, &projection, &view);
+
+        /* bind vao */
+        glBindVertexArray(texturedquad_vao);
+
+        /* bind textures */
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, texture_white);
+
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, rendered_texture);
+
+        glActiveTexture(GL_TEXTURE2);
+        glBindTexture(GL_TEXTURE_2D, rendered_texture);
+
+        /* set texture uniforms */
+        glUniform1i(glGetUniformLocation(program, "map_Ka"), 0);
+        glUniform1i(glGetUniformLocation(program, "map_Kd"), 1);
+        glUniform1i(glGetUniformLocation(program, "map_Ks"), 2);
+
+        /* set other material uniforms */
+        vec3 black = {0, 0, 0};
+        vec3 gray = {0.124, 0.124, 0.124};
+        vec3 white = {1, 1, 1};
+        glUniform3fv(glGetUniformLocation(program, "Ka"), 1, gray);
+        glUniform3fv(glGetUniformLocation(program, "Kd"), 1, white);
+        glUniform3fv(glGetUniformLocation(program, "Ks"), 1, black);
+
+        glUniform1f(glGetUniformLocation(program, "Ns"), 0);
+
+        glUniform1f(glGetUniformLocation(program, "ambient_intensity"), 1);
+
+        /* set model-view-projection uniforms */
+        mat4 tq_rot_x;
+        matrotatex(&tq_rot_x, M_PI / 4);
+        mat4 tq_rot_y;
+        matrotatey(&tq_rot_y, M_PI / 4);
+        mat4 tq_rot_z;
+        matrotatex(&tq_rot_z, M_PI / 4);
+        mat4 tq_scale;
+        matscale(&tq_scale, 1);
+        mat4 tq_center;
+        mattranslate(&tq_center, 0, 0, 0);
+
+        mat4 temp1, temp2, tq_model;
+        matmul(&temp2, &tq_rot_z, &tq_rot_y);
+        matmul(&temp1, &tq_rot_x, &tq_scale);
+        matmul(&tq_model, &temp1, &tq_center);
+
+        // mvp. v' = P V M v
+        mat4 tq_mv, tq_mvp;
+        matmul(&tq_mv, &view, &tq_model);
+        matmul(&tq_mvp, &projection, &tq_mv);
+
+        mat3 tq_mv3, tq_mv_normals;
+        mat4tomat3(&tq_mv3, &tq_mv);
+        matinversetranspose(&tq_mv_normals, &tq_mv3);
+
+        glUniformMatrix4fv(glGetUniformLocation(program, "mv"), 1, GL_FALSE,
+                           &tq_mv.m[0][0]);
+        glUniformMatrix4fv(glGetUniformLocation(program, "mvp"), 1, GL_FALSE,
+                           &tq_mvp.m[0][0]);
+        glUniformMatrix3fv(glGetUniformLocation(program, "mv_normals"), 1,
+                           GL_FALSE, &tq_mv_normals.m[0][0]);
+
+        /* actually draw the quad */
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+
         SDL_GL_SwapWindow(window);
     }
 

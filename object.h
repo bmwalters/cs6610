@@ -18,12 +18,13 @@ struct object_object {
     size_t buffer_norm_size;
     void *buffer_texcoord;
     size_t buffer_texcoord_size;
+    GLuint vao;
     GLuint vbo_pos;
     GLuint vbo_norm;
     GLuint vbo_texcoord;
-    GLuint tex_Ka;
-    GLuint tex_Kd;
-    GLuint tex_Ks;
+    GLuint texture_Ka;
+    GLuint texture_Kd;
+    GLuint texture_Ks;
 };
 
 void object_init(struct object_object *object);
