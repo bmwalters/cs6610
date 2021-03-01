@@ -331,3 +331,28 @@ static bool parse_face_line(struct obj_obj *obj, const char *line,
         }
     }
 }
+
+void obj_bounding_box(const struct obj_obj *obj, struct obj_vertex *outmin,
+                      struct obj_vertex *outmax) {
+    if (obj->v.n < 1)
+        return;
+    struct obj_vertex min = obj->v.v[0];
+    struct obj_vertex max = obj->v.v[0];
+    for (size_t i = 1; i < obj->v.n; i++) {
+        struct obj_vertex vertex = obj->v.v[i];
+        if (vertex.x < min.x)
+            min.x = vertex.x;
+        if (vertex.y < min.y)
+            min.y = vertex.y;
+        if (vertex.z < min.z)
+            min.z = vertex.z;
+        if (vertex.x > max.x)
+            max.x = vertex.x;
+        if (vertex.y > max.y)
+            max.y = vertex.y;
+        if (vertex.z > max.z)
+            max.z = vertex.z;
+    }
+    *outmin = min;
+    *outmax = max;
+}

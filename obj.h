@@ -1,8 +1,8 @@
 #pragma once
 
+#include "mtl.h"
 #include <stdbool.h>
 #include <stdio.h>
-#include "mtl.h"
 
 struct obj_vertex {
     float x;
@@ -63,3 +63,6 @@ void obj_init(struct obj_obj *obj);
 void obj_release(struct obj_obj *obj);
 
 bool obj_read(struct obj_obj *obj, const char *filename);
+
+void obj_bounding_box(const struct obj_obj *obj, struct obj_vertex *outmin,
+                      struct obj_vertex *outmax);

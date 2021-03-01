@@ -1,280 +1,26 @@
+#include "gl.h"
+#include "matvec.h"
+#include "obj.h"
+#include "object.h"
+#include <SDL.h>
+#include <SDL_video.h>
 #include <assert.h>
-#include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#ifdef __APPLE__
-#define GL_SILENCE_DEPRECATION
-#define GLEW_NO_GLU
-#endif
-#include <GL/glew.h>
-#include <SDL.h>
-#include <SDL_video.h>
+#include <tgmath.h>
 
-#include "obj.h"
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 
 const int DEBUG = 1;
 const int VERBOSE = 1;
 
-const float PI = 3.1415926535;
-
-/* column-major order */
-
-static void matmul(float lm[4][4], float rm[4][4], float outm[4][4]) {
-    float *l = lm[0];
-    float *r = rm[0];
-    float *out = outm[0];
-    for (int i = 0; i < 16; i += 4, out += 4) {
-        float a[4], b[4], c[4], d[4];
-        for (int j = 0; j < 4; ++j)
-            a[j] = l[j] * r[i];
-        for (int j = 0; j < 4; ++j)
-            b[j] = l[4 + j] * r[i + 1];
-        for (int j = 0; j < 4; ++j)
-            c[j] = l[8 + j] * r[i + 2];
-        for (int j = 0; j < 4; ++j)
-            d[j] = l[12 + j] * r[i + 3];
-        for (int j = 0; j < 4; ++j)
-            out[j] = a[j] + b[j] + c[j] + d[j];
-    }
-}
-
-static void matscale(float out[4][4], float scale) {
-    float m[4][4] = {
-        {scale, 0, 0, 0}, {0, scale, 0, 0}, {0, 0, scale, 0}, {0, 0, 0, 1}};
-    memcpy(out, m, sizeof(float[4][4]));
-}
-
-static void mattranslate(float out[4][4], float tx, float ty, float tz) {
-    float m[4][4] = {{1, 0, 0, 0}, {0, 1, 0, 0}, {0, 0, 1, 0}, {tx, ty, tz, 1}};
-    memcpy(out, m, sizeof(float[4][4]));
-}
-
-static void matrotatex(float out[4][4], float theta) {
-    float m[4][4] = {{1, 0, 0, 0},
-                     {0, cos(theta), -sin(theta), 0},
-                     {0, sin(theta), cos(theta), 0},
-                     {0, 0, 0, 1}};
-    memcpy(out, m, sizeof(float[4][4]));
-}
-
-static void matrotatey(float out[4][4], float theta) {
-    float m[4][4] = {{cos(theta), 0, sin(theta), 0},
-                     {0, 1, 0, 0},
-                     {-sin(theta), 0, cos(theta), 0},
-                     {0, 0, 0, 1}};
-    memcpy(out, m, sizeof(float[4][4]));
-}
-
-static void matrotatez(float out[4][4], float theta) {
-    float m[4][4] = {{cos(theta), -sin(theta), 0, 0},
-                     {sin(theta), cos(theta), 0, 0},
-                     {0, 0, 1, 0},
-                     {0, 0, 0, 1}};
-    memcpy(out, m, sizeof(float[4][4]));
-}
-
-static float vecmag(const float v[3]) {
-    return sqrtf(powf(v[0], 2) + powf(v[1], 2) + powf(v[2], 2));
-}
-
-static void assert_close(float a, float b) {
-    const float epsilon = 0.1f;
-    assert((a - b) <= epsilon);
-}
-
-static void test_vecmag() {
-    float v[3] = {2, 3, 6};
-    assert_close(vecmag(v), 7);
-}
-
-static void vecnormalize(float v[3]) {
-    float mag = vecmag(v);
-    v[0] /= mag;
-    v[1] /= mag;
-    v[2] /= mag;
-}
-
-static void vecscale(float v[3], float scale) {
-    v[0] *= scale;
-    v[1] *= scale;
-    v[2] *= scale;
-}
-
-static float vecdot(const float u[3], const float v[3]) {
-    return u[0] * v[0] + u[1] * v[1] + u[2] * v[2];
-}
-
-static void veccross(float out[3], const float u[3], const float v[3]) {
-    out[0] = u[1] * v[2] - u[2] * v[1];
-    out[1] = u[2] * v[0] - u[0] * v[2];
-    out[2] = u[0] * v[1] - u[1] * v[0];
-}
-
-static void test_veccross() {
-    float out[3];
-
-    float u1[3] = {1, 0, 0};
-    float v1[3] = {0, 1, 0};
-    veccross(out, u1, v1);
-    assert_close(out[0], 0);
-    assert_close(out[1], 0);
-    assert_close(out[2], 1);
-
-    float u2[3] = {-7, 3, 15};
-    float v2[3] = {38, -3, -1};
-    veccross(out, u2, v2);
-    assert_close(out[0], 42);
-    assert_close(out[1], 563);
-    assert_close(out[2], -93);
-}
-
-static void matview(float out[4][4], float eye[3], float target[3],
-                    float up[3]) {
-    float f[3] = {target[0] - eye[0], target[1] - eye[1], target[2] - eye[2]};
-    vecnormalize(f);
-
-    float s[3];
-    veccross(s, f, up);
-    vecnormalize(s);
-
-    float u[3];
-    veccross(u, s, f);
-
-    float m[4][4] = {{s[0], u[0], -f[0], 0},
-                     {s[1], u[1], -f[1], 0},
-                     {s[2], u[2], -f[2], 0},
-                     {-vecdot(s, eye), -vecdot(u, eye), vecdot(f, eye), 1}};
-    memcpy(out, m, sizeof(float[4][4]));
-}
-
-static void veceulerangles(float out[3], float yaw, float pitch) {
-    out[0] = cosf(yaw) * cosf(pitch);
-    out[1] = sinf(pitch);
-    out[2] = sinf(yaw) * cosf(pitch);
-}
-
-static void matperspective(float out[4][4], float fovy, float aspect,
-                           float z_near, float z_far) {
-    const float S = 1 / tan(fovy / 2);
-    const float m[4][4] = {{S / aspect, 0, 0, 0},
-                           {0, S, 0, 0},
-                           {0, 0, -(z_far + z_near) / (z_far - z_near),
-                            -(2 * z_far * z_near) / (z_far - z_near)},
-                           {0, 0, -1, 0}};
-    memcpy(out, m, sizeof(float[4][4]));
-}
-
-static void mat4tomat3(float out[3][3], float in[4][4]) {
-    out[0][0] = in[0][0];
-    out[0][1] = in[0][1];
-    out[0][2] = in[0][2];
-    out[1][0] = in[1][0];
-    out[1][1] = in[1][1];
-    out[1][2] = in[1][2];
-    out[2][0] = in[2][0];
-    out[2][1] = in[2][1];
-    out[2][2] = in[2][2];
-}
-
-static void matinversetranspose(float out[3][3], const float m[3][3]) {
-    float Determinant = +m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
-                        m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
-                        m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
-
-    float Inverse[3][3];
-    Inverse[0][0] = +(m[1][1] * m[2][2] - m[2][1] * m[1][2]) / Determinant;
-    Inverse[0][1] = -(m[1][0] * m[2][2] - m[2][0] * m[1][2]) / Determinant;
-    Inverse[0][2] = +(m[1][0] * m[2][1] - m[2][0] * m[1][1]) / Determinant;
-    Inverse[1][0] = -(m[0][1] * m[2][2] - m[2][1] * m[0][2]) / Determinant;
-    Inverse[1][1] = +(m[0][0] * m[2][2] - m[2][0] * m[0][2]) / Determinant;
-    Inverse[1][2] = -(m[0][0] * m[2][1] - m[2][0] * m[0][1]) / Determinant;
-    Inverse[2][0] = +(m[0][1] * m[1][2] - m[1][1] * m[0][2]) / Determinant;
-    Inverse[2][1] = -(m[0][0] * m[1][2] - m[1][0] * m[0][2]) / Determinant;
-    Inverse[2][2] = +(m[0][0] * m[1][1] - m[1][0] * m[0][1]) / Determinant;
-
-    memcpy(out, Inverse, sizeof(float[3][3]));
-}
-
-static void mat4mulv4(float out[4], const float m[4][4], const float v[4]) {
-    out[0] = v[0] * m[0][0] + v[1] * m[1][0] + v[2] * m[2][0] + v[3] * m[3][0];
-    out[1] = v[0] * m[0][1] + v[1] * m[1][1] + v[2] * m[2][1] + v[3] * m[3][1];
-    out[2] = v[0] * m[0][2] + v[1] * m[1][2] + v[2] * m[2][2] + v[3] * m[3][2];
-    out[3] = v[0] * m[0][3] + v[1] * m[1][3] + v[2] * m[2][3] + v[3] * m[3][3];
-}
-
-static void test_mat4mulv4() {
-    float m[4][4] = {
-        {4, 1, 0, 0},
-        {0, 0, 3, 2},
-        {1, 1, 1, 1},
-        {0, 0, 2, 0},
-    };
-
-    float v[4] = {3, 2, 4, 1};
-
-    float out[4];
-    mat4mulv4(out, m, v);
-
-    assert(out[0] == 16);
-    assert(out[1] == 7);
-    assert(out[2] == 12);
-    assert(out[3] == 8);
-}
-
-static void matprint(float m[4][4]) {
-    printf("%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n%f %f %f %f\n", m[0][0],
-           m[1][0], m[2][0], m[3][0], m[0][1], m[1][1], m[2][1], m[3][1],
-           m[0][2], m[1][2], m[2][2], m[3][2], m[0][3], m[1][3], m[2][3],
-           m[3][3]);
-}
-
-static void test_vec() {
-    test_vecmag();
-    test_veccross();
-}
-
-static void test_mat() { test_mat4mulv4(); }
-
-static void bounding_box(const struct obj_obj *obj, struct obj_vertex *outmin,
-                         struct obj_vertex *outmax) {
-    if (obj->v.n < 1)
-        return;
-    struct obj_vertex min = obj->v.v[0];
-    struct obj_vertex max = obj->v.v[0];
-    for (size_t i = 1; i < obj->v.n; i++) {
-        struct obj_vertex vertex = obj->v.v[i];
-        if (vertex.x < min.x)
-            min.x = vertex.x;
-        if (vertex.y < min.y)
-            min.y = vertex.y;
-        if (vertex.z < min.z)
-            min.z = vertex.z;
-        if (vertex.x > max.x)
-            max.x = vertex.x;
-        if (vertex.y > max.y)
-            max.y = vertex.y;
-        if (vertex.z > max.z)
-            max.z = vertex.z;
-    }
-    *outmin = min;
-    *outmax = max;
-}
-
 static bool compile_shader_file(const char *const filename, GLuint shader);
 static bool compile_shader_program(GLuint program);
 
-static bool
-naive_make_triangle_buffer(const struct obj_obj *obj, size_t *out_tri_count,
-                           void **out_pos_buffer, size_t *out_pos_buffer_size,
-                           void **out_norm_buffer, size_t *out_norm_buffer_size,
-                           void **out_texcoord_buffer,
-                           size_t *out_texcoord_buffer_size);
-
-static void testmain() {
-    test_vec();
-    test_mat();
-}
+static void testmain() { matvec_test(); }
 
 int main(int argc, const char *argv[]) {
     if (DEBUG)
@@ -285,10 +31,12 @@ int main(int argc, const char *argv[]) {
         return 1;
     }
 
+    struct object_object teapot;
+    object_init(&teapot);
+    struct obj_obj *obj = &teapot.obj;
+
     const char *obj_filename = argv[1];
-    struct obj_obj obj;
-    obj_init(&obj);
-    if (!obj_read(&obj, obj_filename)) {
+    if (!obj_read(obj, obj_filename)) {
         fprintf(stderr, "Failed to parse obj file\n");
         return 1;
     }
@@ -298,12 +46,12 @@ int main(int argc, const char *argv[]) {
                "vertices\n\t%zu vertex normals\n\t%zu faces\n\t%zu normal "
                "faces\n\t%zu texture faces\n\t%zu materials\n\t%zu vertices "
                "with materials\n",
-               obj_filename, obj.v.n, obj.t.n, obj.n.n, obj.vf.n, obj.nf.n,
-               obj.tf.n, obj.m.n, obj.fm.n);
+               obj_filename, obj->v.n, obj->t.n, obj->n.n, obj->vf.n, obj->nf.n,
+               obj->tf.n, obj->m.n, obj->fm.n);
 
-    if (VERBOSE && obj.m.n > 0)
-        printf("Material 0:\n\tKa %f %f %f\n", obj.m.v[0].Ka[0],
-               obj.m.v[0].Ka[1], obj.m.v[0].Ka[2]);
+    if (VERBOSE && obj->m.n > 0)
+        printf("Material 0:\n\tKa %f %f %f\n", obj->m.v[0].Ka[0],
+               obj->m.v[0].Ka[1], obj->m.v[0].Ka[2]);
 
     SDL_Init(SDL_INIT_VIDEO);
 
@@ -349,122 +97,20 @@ int main(int argc, const char *argv[]) {
         printf("GLEW_VERSION: %s\n", glewGetString(GLEW_VERSION));
 
     GLuint program = glCreateProgram();
-
     compile_shader_program(program);
 
-    GLuint vao;
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
-
-    /*
-    GLuint ebuffer;
-    glGenBuffers(1, &ebuffer);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ebuffer);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, obj.vf.n * sizeof(struct obj_triface),
-                 obj.vf.v, GL_STATIC_DRAW);
-    */
-
-    size_t triangle_count;
-    void *triangle_pos_buffer;
-    size_t triangle_pos_buffer_size;
-    void *triangle_norm_buffer;
-    size_t triangle_norm_buffer_size;
-    void *triangle_texcoord_buffer;
-    size_t triangle_texcoord_buffer_size;
-    if (!naive_make_triangle_buffer(
-            &obj, &triangle_count, &triangle_pos_buffer,
-            &triangle_pos_buffer_size, &triangle_norm_buffer,
-            &triangle_norm_buffer_size, &triangle_texcoord_buffer,
-            &triangle_texcoord_buffer_size))
+    // TODO: Build system so locations from program don't change after
+    // shader recompilation.
+    if (!object_init_vao(&teapot, program)) {
+        fprintf(stderr, "Could not initialize object buffers\n");
         return 1;
+    }
 
-    GLuint vbo_norm;
-    glGenBuffers(1, &vbo_norm);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_norm);
-    glBufferData(GL_ARRAY_BUFFER, triangle_norm_buffer_size,
-                 triangle_norm_buffer, GL_STATIC_DRAW);
-
-    GLuint normal = glGetAttribLocation(program, "normal");
-    glEnableVertexAttribArray(normal);
-    glVertexAttribPointer(normal, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-    GLuint vbo_pos;
-    glGenBuffers(1, &vbo_pos);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_pos);
-    glBufferData(GL_ARRAY_BUFFER, triangle_pos_buffer_size, triangle_pos_buffer,
-                 GL_STATIC_DRAW);
-
-    GLuint pos = glGetAttribLocation(program, "pos");
-    glEnableVertexAttribArray(pos);
-    glVertexAttribPointer(pos, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
-    GLuint texture_Ka;
-    glGenTextures(1, &texture_Ka);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, texture_Ka);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
-                    GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, obj.m.v[0].map_Ka.w,
-                 obj.m.v[0].map_Ka.h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                 obj.m.v[0].map_Ka.v);
-    glGenerateMipmap(GL_TEXTURE_2D);
-
-    GLuint texture_Kd;
-    glGenTextures(1, &texture_Kd);
-    glActiveTexture(GL_TEXTURE1);
-    glBindTexture(GL_TEXTURE_2D, texture_Kd);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
-                    GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, obj.m.v[0].map_Kd.w,
-                 obj.m.v[0].map_Kd.h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                 obj.m.v[0].map_Kd.v);
-    glGenerateMipmap(GL_TEXTURE_2D);
-
-    GLuint texture_Ks;
-    glGenTextures(1, &texture_Ks);
-    glActiveTexture(GL_TEXTURE2);
-    glBindTexture(GL_TEXTURE_2D, texture_Ks);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
-                    GL_LINEAR_MIPMAP_LINEAR);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, obj.m.v[0].map_Ks.w,
-                 obj.m.v[0].map_Ks.h, 0, GL_RGBA, GL_UNSIGNED_BYTE,
-                 obj.m.v[0].map_Ks.v);
-    glGenerateMipmap(GL_TEXTURE_2D);
-
-    GLuint vbo_texcoord;
-    glGenBuffers(1, &vbo_texcoord);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo_texcoord);
-    glBufferData(GL_ARRAY_BUFFER, triangle_texcoord_buffer_size,
-                 triangle_texcoord_buffer, GL_STATIC_DRAW);
-
-    GLuint texcoord = glGetAttribLocation(program, "texcoord");
-    glEnableVertexAttribArray(texcoord);
-    glVertexAttribPointer(texcoord, 3, GL_FLOAT, GL_FALSE, 0, 0);
-
+    // TODO: call this after recompilation?
     glUseProgram(program);
 
-    // TODO: make sure this changes after shader recomp
-    glUniform1i(glGetUniformLocation(program, "map_Ka"), 0);
-    glUniform1i(glGetUniformLocation(program, "map_Kd"), 1);
-    glUniform1i(glGetUniformLocation(program, "map_Ks"), 2);
-
-    glUniform3fv(glGetUniformLocation(program, "Ka"), 1, &obj.m.v[0].Ka[0]);
-    glUniform3fv(glGetUniformLocation(program, "Kd"), 1, &obj.m.v[0].Kd[0]);
-    glUniform3fv(glGetUniformLocation(program, "Ks"), 1, &obj.m.v[0].Ks[0]);
-
-    glUniform1f(glGetUniformLocation(program, "Ns"), obj.m.v[0].Ns);
-
     struct obj_vertex obj_min, obj_max;
-    bounding_box(&obj, &obj_min, &obj_max);
+    obj_bounding_box(obj, &obj_min, &obj_max);
 
     if (VERBOSE)
         printf("obj bounding box: min=(%f, %f, %f); max=(%f, %f, %f)\n",
@@ -472,8 +118,8 @@ int main(int argc, const char *argv[]) {
                obj_max.z);
 
     float obj_fill_scale =
-        1 / fminf(fminf(obj_max.x - obj_min.x, obj_max.y - obj_min.y),
-                  obj_max.z - obj_min.z);
+        1 / fmin(fmin(obj_max.x - obj_min.x, obj_max.y - obj_min.y),
+                 obj_max.z - obj_min.z);
 
     if (VERBOSE)
         printf("obj_fill_scale = %f\n", obj_fill_scale);
@@ -485,20 +131,16 @@ int main(int argc, const char *argv[]) {
     const float z_near = 1; // TODO: Fix bugs when z_near = 0.1
     const float z_far = 100;
 
-    float fovy = PI / 4;
+    float fovy = M_PI / 4;
 
-    float yaw = PI / 2;
+    float yaw = M_PI / 2;
     float pitch = 0;
 
     float cam_dist = 1;
 
-    float light_yaw = PI / 4;
-    float light_pitch = PI / 8;
+    float light_yaw = M_PI / 4;
+    float light_pitch = M_PI / 8;
     float light_dist = 3;
-
-    glEnable(GL_DEPTH_TEST);
-    glViewport(0, 0, W, H);
-    glClearColor(0, 0, 0, 1);
 
     const unsigned char *key_state = SDL_GetKeyboardState(NULL);
 
@@ -534,8 +176,8 @@ int main(int argc, const char *argv[]) {
                 break;
             }
             case SDL_MOUSEWHEEL:
-                fovy =
-                    fminf(PI / 4, fmaxf(PI / 32, fovy - event.wheel.y * 0.02));
+                fovy = fovy - event.wheel.y * 0.02;
+                fovy = fmin(M_PI / 4, fmax(M_PI / 32, fovy));
                 break;
             case SDL_QUIT:
                 running = 0;
@@ -547,78 +189,51 @@ int main(int argc, const char *argv[]) {
 
         // view -> clip space transformation
         // "projection matrix"
-        float projection[4][4];
-        matscale(projection, 1);
-        matperspective(projection, fovy, (float)W / (float)H, z_near, z_far);
+        mat4 projection;
+        matscale(&projection, 1);
+        matperspective(&projection, fovy, (float)W / (float)H, z_near, z_far);
 
         // world -> view transformation
         // "view matrix"
-        float view[4][4];
-        float zero[3] = {0, 0, 0};
-        float up[3] = {0, 1, 0};
-        float eye[3];
+        mat4 view;
+        vec3 zero = {0, 0, 0};
+        vec3 up = {0, 1, 0};
+        vec3 eye;
         veceulerangles(eye, yaw, pitch);
         vecscale(eye, cam_dist);
-        matview(view, eye, zero, up);
-
-        // model -> world transformation
-        // "model matrix"
-        float obj_trans[4][4];
-        mattranslate(obj_trans, 0, 0, 0); // -0.6
-        float obj_rot[4][4];
-        matrotatex(obj_rot, PI / 2);
-        float obj_scale[4][4];
-        matscale(obj_scale, obj_fill_scale);
-        float obj_center[4][4];
-        mattranslate(obj_center, obj_center_xoff, obj_center_yoff,
-                     obj_center_zoff);
-
-        float temp1[4][4], temp2[4][4], model[4][4];
-        matmul(obj_trans, obj_rot, temp2);
-        matmul(temp2, obj_scale, temp1);
-        matmul(temp1, obj_center, model);
-
-        // mvp. v' = P V M v
-        float mv[4][4];
-        float mvp[4][4];
-        matmul(view, model, mv);
-        matmul(projection, mv, mvp);
-
-        glUniformMatrix4fv(glGetUniformLocation(program, "mv"), 1, GL_FALSE,
-                           &mv[0][0]);
-        glUniformMatrix4fv(glGetUniformLocation(program, "mvp"), 1, GL_FALSE,
-                           &mvp[0][0]);
-
-        float mv_normals[3][3];
-        mat4tomat3(mv_normals, mv);
-        matinversetranspose(mv_normals, mv_normals);
-        glUniformMatrix3fv(glGetUniformLocation(program, "mv_normals"), 1,
-                           GL_FALSE, &mv_normals[0][0]);
+        matview(&view, eye, zero, up);
 
         glUniform1f(glGetUniformLocation(program, "ambient_intensity"), 0.2);
 
-        float light_pos[3];
+        vec3 light_pos;
         veceulerangles(light_pos, light_yaw, light_pitch);
         vecscale(light_pos, light_dist);
-        float light_pos_h[4] = {light_pos[0], light_pos[1], light_pos[2], 1};
-        float light_pos_view_h[4];
-        mat4mulv4(light_pos_view_h, view, light_pos_h);
+        vec4 light_pos_h = {light_pos[0], light_pos[1], light_pos[2], 1};
+        vec4 light_pos_view_h;
+        mat4mulv4(light_pos_view_h, &view, light_pos_h);
         vecscale(light_pos_view_h, 1 / light_pos_view_h[3]);
-        float light_pos_view[3] = {light_pos_view_h[0], light_pos_view_h[1],
-                                   light_pos_view_h[2]};
+        vec3 light_pos_view = {light_pos_view_h[0], light_pos_view_h[1],
+                               light_pos_view_h[2]};
         glUniform3fv(glGetUniformLocation(program, "light_pos_view"), 1,
                      &light_pos_view[0]);
         glUniform1f(glGetUniformLocation(program, "light_intensity"), 0.8);
 
+        teapot.rx = M_PI / 2;
+        teapot.tx = obj_center_xoff;
+        teapot.ty = obj_center_yoff;
+        teapot.tz = obj_center_zoff;
+        teapot.scale = obj_fill_scale;
+
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glEnable(GL_DEPTH_TEST);
+        glViewport(0, 0, W, H);
+        glClearColor(0, 0, 0, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        glDrawArrays(GL_TRIANGLES, 0, triangle_count * 3);
-        // glDrawElements(GL_TRIANGLES, obj.vf.n * 3, GL_UNSIGNED_INT, 0);
-
+        object_render(&teapot, program, &projection, &view);
         SDL_GL_SwapWindow(window);
     }
 
-    obj_release(&obj);
+    object_release(&teapot);
 
     SDL_GL_DeleteContext(context);
     SDL_DestroyWindow(window);
@@ -687,64 +302,4 @@ static bool compile_shader_program(GLuint program) {
     glDeleteShader(fs);
 
     return program_linked == GL_TRUE;
-}
-
-// TODO: replace with glDrawElements etc.
-static bool
-naive_make_triangle_buffer(const struct obj_obj *obj, size_t *out_tri_count,
-                           void **out_pos_buffer, size_t *out_pos_buffer_size,
-                           void **out_norm_buffer, size_t *out_norm_buffer_size,
-                           void **out_texcoord_buffer,
-                           size_t *out_texcoord_buffer_size) {
-    if (obj->vf.n != obj->nf.n) {
-        fprintf(stderr, "Not sure how to handle obj with #vf != #nf\n");
-        return false;
-    }
-
-    size_t tri_size = sizeof(float[3][3]);
-    size_t n_tris = obj->vf.n;
-
-    float *pos_buffer = calloc(n_tris, tri_size);
-    if (pos_buffer == NULL) {
-        fprintf(stderr, "Failed to allocate triangle pos buffer\n");
-        return false;
-    }
-
-    float *norm_buffer = calloc(n_tris, tri_size);
-    if (norm_buffer == NULL) {
-        fprintf(stderr, "Failed to allocate triangle norm buffer\n");
-        return false;
-    }
-
-    float *texcoord_buffer = calloc(n_tris, tri_size);
-    if (texcoord_buffer == NULL) {
-        fprintf(stderr, "Failed to allocate triangle texcoord buffer\n");
-        return false;
-    }
-
-    for (size_t tri = 0; tri < n_tris; tri++) {
-        for (size_t vert = 0; vert < 3; vert++) {
-            size_t verti = obj->vf.v[tri].v[vert] - 1;
-            memcpy(pos_buffer + tri * 9 + vert * 3, &obj->v.v[verti],
-                   sizeof(float[3]));
-
-            size_t nverti = obj->nf.v[tri].v[vert] - 1;
-            memcpy(norm_buffer + tri * 9 + vert * 3, &obj->n.v[nverti],
-                   sizeof(float[3]));
-
-            size_t texcoordi = obj->tf.v[tri].v[vert] - 1;
-            memcpy(texcoord_buffer + tri * 9 + vert * 3, &obj->t.v[texcoordi],
-                   sizeof(float[3]));
-        }
-    }
-
-    *out_tri_count = n_tris;
-    *out_pos_buffer = pos_buffer;
-    *out_pos_buffer_size = n_tris * tri_size;
-    *out_norm_buffer = norm_buffer;
-    *out_norm_buffer_size = n_tris * tri_size;
-    *out_texcoord_buffer = texcoord_buffer;
-    *out_texcoord_buffer_size = n_tris * tri_size;
-
-    return true;
 }
