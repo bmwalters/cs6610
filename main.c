@@ -227,6 +227,15 @@ int main(int argc, const char *argv[]) {
     float light_pitch = M_PI / 8;
     float light_dist = 3;
 
+    float fovy_outer = M_PI / 4;
+    float yaw_outer = M_PI / 2;
+    float pitch_outer = 0;
+    float cam_dist_outer = 1;
+
+    float light_outer_yaw = M_PI / 4;
+    float light_outer_pitch = M_PI / 8;
+    float light_outer_dist = 3;
+
     const unsigned char *key_state = SDL_GetKeyboardState(NULL);
 
     int running = 1;
@@ -252,17 +261,31 @@ int main(int argc, const char *argv[]) {
                         light_yaw += event.motion.xrel * 0.005;
                         light_pitch += event.motion.yrel * 0.005;
                     } else {
-                        yaw += event.motion.xrel * 0.005;
-                        pitch += event.motion.yrel * 0.005;
+                        if (key_state[SDL_SCANCODE_LALT]) {
+                            yaw_outer += event.motion.xrel * 0.005;
+                            pitch_outer += event.motion.yrel * 0.005;
+                        } else {
+                            yaw += event.motion.xrel * 0.005;
+                            pitch += event.motion.yrel * 0.005;
+                        }
                     }
                 } else if (event.motion.state & SDL_BUTTON_RMASK) {
-                    cam_dist += event.motion.yrel * 0.005;
+                    if (key_state[SDL_SCANCODE_LALT]) {
+                        cam_dist_outer += event.motion.yrel * 0.005;
+                    } else {
+                        cam_dist += event.motion.yrel * 0.005;
+                    }
                 }
                 break;
             }
             case SDL_MOUSEWHEEL:
-                fovy = fovy - event.wheel.y * 0.02;
-                fovy = fmin(M_PI / 4, fmax(M_PI / 32, fovy));
+                if (key_state[SDL_SCANCODE_LALT]) {
+                    fovy_outer = fovy_outer - event.wheel.y * 0.02;
+                    fovy_outer = fmin(M_PI / 4, fmax(M_PI / 32, fovy_outer));
+                } else {
+                    fovy = fovy - event.wheel.y * 0.02;
+                    fovy = fmin(M_PI / 4, fmax(M_PI / 32, fovy));
+                }
                 break;
             case SDL_QUIT:
                 running = 0;
@@ -279,7 +302,8 @@ int main(int argc, const char *argv[]) {
         // "projection matrix"
         mat4 projection;
         matscale(&projection, 1);
-        matperspective(&projection, fovy, (float)W / (float)H, z_near, z_far);
+        matperspective(&projection, fovy, (float)texw / (float)texh, z_near,
+                       z_far);
 
         // world -> view transformation
         // "view matrix"
@@ -363,7 +387,36 @@ int main(int argc, const char *argv[]) {
 
         glUniform1f(glGetUniformLocation(program, "ambient_intensity"), 1);
 
+        vec3 light_outer_pos;
+        veceulerangles(light_outer_pos, light_outer_yaw, light_outer_pitch);
+        vecscale(light_outer_pos, light_outer_dist);
+        vec4 light_outer_pos_h = {light_outer_pos[0], light_outer_pos[1],
+                                  light_outer_pos[2], 1};
+        vec4 light_outer_pos_view_h;
+        mat4mulv4(light_outer_pos_view_h, &view, light_outer_pos_h);
+        vecscale(light_outer_pos_view_h, 1 / light_outer_pos_view_h[3]);
+        vec3 light_outer_pos_view = {light_outer_pos_view_h[0],
+                                     light_outer_pos_view_h[1],
+                                     light_outer_pos_view_h[2]};
+        glUniform3fv(glGetUniformLocation(program, "light_pos_view"), 1,
+                     &light_outer_pos_view[0]);
+        glUniform1f(glGetUniformLocation(program, "light_intensity"), 0.8);
+
         /* set model-view-projection uniforms */
+        // view -> clip space transformation
+        // "projection matrix"
+        mat4 projection_outer;
+        matperspective(&projection_outer, fovy_outer, (float)W / (float)H,
+                       z_near, z_far);
+
+        // world -> view transformation
+        // "view matrix"
+        mat4 view_outer;
+        vec3 eye_outer;
+        veceulerangles(eye_outer, yaw_outer, pitch_outer);
+        vecscale(eye_outer, cam_dist_outer);
+        matview(&view_outer, eye_outer, zero, up);
+
         mat4 tq_rot_x;
         matrotatex(&tq_rot_x, M_PI / 4);
         mat4 tq_rot_y;
@@ -382,8 +435,8 @@ int main(int argc, const char *argv[]) {
 
         // mvp. v' = P V M v
         mat4 tq_mv, tq_mvp;
-        matmul(&tq_mv, &view, &tq_model);
-        matmul(&tq_mvp, &projection, &tq_mv);
+        matmul(&tq_mv, &view_outer, &tq_model);
+        matmul(&tq_mvp, &projection_outer, &tq_mv);
 
         mat3 tq_mv3, tq_mv_normals;
         mat4tomat3(&tq_mv3, &tq_mv);
