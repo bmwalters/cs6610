@@ -114,6 +114,18 @@ int main(int argc, const char *argv[]) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
                     GL_LINEAR_MIPMAP_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+#ifdef GL_EXT_texture_filter_anisotropic
+    if (VERBOSE)
+        printf("GL_EXT_texture_filter_anisotropic supported\n");
+    float anisotropy;
+    glGetFloatv(GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &anisotropy);
+    anisotropy = fmin(8.0, anisotropy);
+    if (VERBOSE)
+        printf("Using %.1fx anisotropy\n", anisotropy);
+    glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, anisotropy);
+#else
+    fprintf(stderr, "GL_EXT_texture_filter_anisotropic not supported\n");
+#endif
 
     /* create depth buffer */
     GLuint depth_buffer;
