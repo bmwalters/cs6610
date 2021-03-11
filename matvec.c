@@ -25,6 +25,49 @@ void matmul(mat4 *outm, const mat4 *lm, const mat4 *rm) {
     }
 }
 
+static void test_matmul() {
+    mat4 m = {.m = {
+                  {4, 1, 0, 0},
+                  {0, 0, 3, 2},
+                  {1, 1, 1, 1},
+                  {0, 0, 2, 0},
+              }};
+
+    mat4 n = {.m = {
+                  {3, 3, 3, 0},
+                  {0, 2, 0, 2},
+                  {1, 0, 1, 0},
+                  {1, 0, 0, 1},
+              }};
+
+    mat4 out;
+    matmul(&out, &m, &n);
+
+    /* first column */
+    assert(out.m[0][0] == 15);
+    assert(out.m[0][1] == 6);
+    assert(out.m[0][2] == 12);
+    assert(out.m[0][3] == 9);
+
+    /* second column */
+    assert(out.m[1][0] == 0);
+    assert(out.m[1][1] == 0);
+    assert(out.m[1][2] == 10);
+    assert(out.m[1][3] == 4);
+
+    /* third column */
+    assert(out.m[2][0] == 5);
+    assert(out.m[2][1] == 2);
+    assert(out.m[2][2] == 1);
+    assert(out.m[2][3] == 1);
+
+    /* fourth column */
+    assert(out.m[3][0] == 4);
+    assert(out.m[3][1] == 1);
+    assert(out.m[3][2] == 2);
+    assert(out.m[3][3] == 0);
+}
+
 void matscale(mat4 *out, float scale) {
     float m[4][4] = {
         {scale, 0, 0, 0}, {0, scale, 0, 0}, {0, 0, scale, 0}, {0, 0, 0, 1}};
@@ -141,12 +184,11 @@ void veceulerangles(vec3 out, float yaw, float pitch) {
 
 void matperspective(mat4 *out, float fovy, float aspect, float z_near,
                     float z_far) {
-    const float S = 1 / tan(fovy / 2);
-    const float m[4][4] = {{S / aspect, 0, 0, 0},
-                           {0, S, 0, 0},
-                           {0, 0, -(z_far + z_near) / (z_far - z_near),
-                            -(2 * z_far * z_near) / (z_far - z_near)},
-                           {0, 0, -1, 0}};
+    const float tanHalfFovy = tan(fovy / 2);
+    const float m[4][4] = {{1 / (aspect * tanHalfFovy), 0, 0, 0},
+                           {0, 1 / tanHalfFovy, 0, 0},
+                           {0, 0, -(z_far + z_near) / (z_far - z_near), -1},
+                           {0, 0, -(2 * z_far * z_near) / (z_far - z_near), 0}};
     memcpy(out->m, m, sizeof(float[4][4]));
 }
 
@@ -221,7 +263,10 @@ static void test_vec() {
     test_veccross();
 }
 
-static void test_mat() { test_mat4mulv4(); }
+static void test_mat() {
+    test_matmul();
+    test_mat4mulv4();
+}
 
 void matvec_test() {
     test_vec();
