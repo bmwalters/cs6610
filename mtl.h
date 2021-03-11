@@ -57,5 +57,12 @@ void mtl_library_init(struct mtl_library *library);
 /** must be called before deallocating an `mtl_library` */
 void mtl_library_release(struct mtl_library *library);
 
-/** appends material definitions from file `filename` into `library` until EOF */
+/** appends material definitions from `filename` into `library` until EOF */
 bool mtl_library_read(struct mtl_library *library, const char *filename);
+
+/** loads a texture image from a file */
+bool mtl_texture_image_load(struct mtl_texture_image *dest,
+                            const char *filename);
+
+/** releases a texture image */
+void mtl_texture_image_release(struct mtl_texture_image *image);

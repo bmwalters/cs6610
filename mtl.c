@@ -9,11 +9,9 @@
 
 /* mtl_texture_image */
 
-static bool mtl_texture_image_load(struct mtl_texture_image *dest,
-                                   const char *mtl_filename,
-                                   const char *img_filename);
-
-static void mtl_texture_image_release(struct mtl_texture_image *image);
+static bool mtl_texture_image_load_relative(struct mtl_texture_image *dest,
+                                            const char *mtl_filename,
+                                            const char *img_filename);
 
 /* mtl_library vector functions */
 
@@ -130,24 +128,24 @@ static bool mtl_library_read_from_file(struct mtl_library *library,
             char img_filename[nline];
             sscanf(line, "map_Ka %s", img_filename);
             // TODO: check scanf return value
-            if (!mtl_texture_image_load(&cur_mtl.map_Ka, filename,
-                                        img_filename))
+            if (!mtl_texture_image_load_relative(&cur_mtl.map_Ka, filename,
+                                                 img_filename))
                 return false;
         } else if (strncmp(line, "map_Kd ", 7) == 0) {
             assert(has_cur_mtl);
             char img_filename[nline];
             sscanf(line, "map_Kd %s", img_filename);
             // TODO: check scanf return value
-            if (!mtl_texture_image_load(&cur_mtl.map_Kd, filename,
-                                        img_filename))
+            if (!mtl_texture_image_load_relative(&cur_mtl.map_Kd, filename,
+                                                 img_filename))
                 return false;
         } else if (strncmp(line, "map_Ks ", 7) == 0) {
             assert(has_cur_mtl);
             char img_filename[nline];
             sscanf(line, "map_Ks %s", img_filename);
             // TODO: check scanf return value
-            if (!mtl_texture_image_load(&cur_mtl.map_Ks, filename,
-                                        img_filename))
+            if (!mtl_texture_image_load_relative(&cur_mtl.map_Ks, filename,
+                                                 img_filename))
                 return false;
         }
     }
@@ -188,11 +186,13 @@ static void vflip_sdl_surface(SDL_Surface *surface) {
     free(temp);
 }
 
-static bool mtl_texture_image_load(struct mtl_texture_image *dest,
-                                   const char *mtl_filename,
-                                   const char *img_filename) {
+static bool mtl_texture_image_load_relative(struct mtl_texture_image *dest,
+                                            const char *mtl_filename,
+                                            const char *img_filename) {
     size_t filename_len = strlen(mtl_filename) + strlen(img_filename) + 1;
     char *filename = calloc(filename_len, 1);
+    if (filename == NULL)
+        return false;
 
     /* read the directory of the mtl file into filename */
     strncpy(filename, mtl_filename, filename_len);
@@ -206,6 +206,13 @@ static bool mtl_texture_image_load(struct mtl_texture_image *dest,
     strcat(filename, "/");
     strncat(filename, img_filename, filename_len - mtl_directory_len - 1);
 
+    bool result = mtl_texture_image_load(dest, filename);
+    free(filename);
+    return result;
+}
+
+bool mtl_texture_image_load(struct mtl_texture_image *dest,
+                            const char *filename) {
     SDL_Surface *surface;
     if ((surface = IMG_Load(filename)) == NULL)
         return false;
@@ -242,7 +249,7 @@ static bool mtl_texture_image_load(struct mtl_texture_image *dest,
     return true;
 }
 
-static void mtl_texture_image_release(struct mtl_texture_image *image) {
+void mtl_texture_image_release(struct mtl_texture_image *image) {
     image->w = 0;
     image->h = 0;
     free(image->v);
